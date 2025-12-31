@@ -27,16 +27,12 @@ class SlowMiddleware(AgentMiddleware[None]):
         self.before_run_called = False
         self.after_run_called = False
 
-    async def before_run(
-        self, prompt: str | Sequence[Any], deps: None
-    ) -> str | Sequence[Any]:
+    async def before_run(self, prompt: str | Sequence[Any], deps: None) -> str | Sequence[Any]:
         await asyncio.sleep(self.delay)
         self.before_run_called = True
         return f"{self.name}:{prompt}"
 
-    async def after_run(
-        self, prompt: str | Sequence[Any], output: Any, deps: None
-    ) -> Any:
+    async def after_run(self, prompt: str | Sequence[Any], output: Any, deps: None) -> Any:
         await asyncio.sleep(self.delay)
         self.after_run_called = True
         return f"{self.name}:{output}"
@@ -48,14 +44,10 @@ class FailingMiddleware(AgentMiddleware[None]):
     def __init__(self, error_message: str = "Test error") -> None:
         self.error_message = error_message
 
-    async def before_run(
-        self, prompt: str | Sequence[Any], deps: None
-    ) -> str | Sequence[Any]:
+    async def before_run(self, prompt: str | Sequence[Any], deps: None) -> str | Sequence[Any]:
         raise InputBlocked(self.error_message)
 
-    async def after_run(
-        self, prompt: str | Sequence[Any], output: Any, deps: None
-    ) -> Any:
+    async def after_run(self, prompt: str | Sequence[Any], output: Any, deps: None) -> Any:
         raise InputBlocked(self.error_message)
 
 
@@ -66,15 +58,11 @@ class SlowFailingMiddleware(AgentMiddleware[None]):
         self.delay = delay
         self.reason = reason
 
-    async def before_run(
-        self, prompt: str | Sequence[Any], deps: None
-    ) -> str | Sequence[Any]:
+    async def before_run(self, prompt: str | Sequence[Any], deps: None) -> str | Sequence[Any]:
         await asyncio.sleep(self.delay)
         raise InputBlocked(self.reason)
 
-    async def after_run(
-        self, prompt: str | Sequence[Any], output: Any, deps: None
-    ) -> Any:
+    async def after_run(self, prompt: str | Sequence[Any], output: Any, deps: None) -> Any:
         await asyncio.sleep(self.delay)
         raise InputBlocked(self.reason)
 
@@ -90,15 +78,11 @@ class CountingMiddleware(AgentMiddleware[None]):
         self.before_model_count = 0
         self.on_error_count = 0
 
-    async def before_run(
-        self, prompt: str | Sequence[Any], deps: None
-    ) -> str | Sequence[Any]:
+    async def before_run(self, prompt: str | Sequence[Any], deps: None) -> str | Sequence[Any]:
         self.before_run_count += 1
         return prompt
 
-    async def after_run(
-        self, prompt: str | Sequence[Any], output: Any, deps: None
-    ) -> Any:
+    async def after_run(self, prompt: str | Sequence[Any], output: Any, deps: None) -> Any:
         self.after_run_count += 1
         return output
 
@@ -164,9 +148,7 @@ class TestParallelMiddlewareInit:
     def test_init_with_custom_strategy(self) -> None:
         """Test initialization with custom aggregation strategy."""
         mw = CountingMiddleware()
-        parallel = ParallelMiddleware(
-            middleware=[mw], strategy=AggregationStrategy.FIRST_SUCCESS
-        )
+        parallel = ParallelMiddleware(middleware=[mw], strategy=AggregationStrategy.FIRST_SUCCESS)
         assert parallel.strategy == AggregationStrategy.FIRST_SUCCESS
 
     def test_init_with_timeout(self) -> None:
@@ -284,9 +266,7 @@ class TestParallelMiddlewareBeforeRun:
         """Test RACE returns first completed result."""
         mw1 = CountingMiddleware()
         mw2 = CountingMiddleware()
-        parallel = ParallelMiddleware(
-            middleware=[mw1, mw2], strategy=AggregationStrategy.RACE
-        )
+        parallel = ParallelMiddleware(middleware=[mw1, mw2], strategy=AggregationStrategy.RACE)
 
         result = await parallel.before_run("test", None)
 
@@ -476,9 +456,7 @@ class TestParallelMiddlewareIntegration:
         # Use delays to ensure the failing middleware completes first
         mw1 = SlowFailingMiddleware(delay=0.01, reason="fast_error")
         mw2 = SlowMiddleware(delay=0.5, name="slow")
-        parallel = ParallelMiddleware(
-            middleware=[mw1, mw2], strategy=AggregationStrategy.RACE
-        )
+        parallel = ParallelMiddleware(middleware=[mw1, mw2], strategy=AggregationStrategy.RACE)
 
         with pytest.raises(InputBlocked, match="fast_error"):
             await parallel.before_run("test", None)
@@ -487,9 +465,7 @@ class TestParallelMiddlewareIntegration:
         """Test RACE strategy when results list is logically empty (edge case)."""
         # Create a custom middleware that we can verify runs
         mw = CountingMiddleware()
-        parallel = ParallelMiddleware(
-            middleware=[mw], strategy=AggregationStrategy.RACE
-        )
+        parallel = ParallelMiddleware(middleware=[mw], strategy=AggregationStrategy.RACE)
 
         result = await parallel.before_run("test", None)
         assert result == "test"
@@ -497,9 +473,7 @@ class TestParallelMiddlewareIntegration:
     async def test_first_success_with_no_results(self) -> None:
         """Test FIRST_SUCCESS returns default when all succeed but list empty edge."""
         mw = CountingMiddleware()
-        parallel = ParallelMiddleware(
-            middleware=[mw], strategy=AggregationStrategy.FIRST_SUCCESS
-        )
+        parallel = ParallelMiddleware(middleware=[mw], strategy=AggregationStrategy.FIRST_SUCCESS)
 
         result = await parallel.before_run("test", None)
         assert result == "test"

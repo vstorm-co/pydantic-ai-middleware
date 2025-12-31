@@ -26,9 +26,7 @@ class SlowSafetyCheck(AgentMiddleware[None]):
     def __init__(self, delay: float = 0.5) -> None:
         self.delay = delay
 
-    async def before_run(
-        self, prompt: str | Sequence[Any], deps: None
-    ) -> str | Sequence[Any]:
+    async def before_run(self, prompt: str | Sequence[Any], deps: None) -> str | Sequence[Any]:
         await asyncio.sleep(self.delay)
         if isinstance(prompt, str) and "dangerous" in prompt.lower():
             raise InputBlocked("Dangerous content detected")
@@ -59,7 +57,9 @@ async def run_blocking(prompt: str, guardrail_delay: float) -> tuple[str | None,
         return None, time.time() - start, e.reason
 
 
-async def run_concurrent(prompt: str, guardrail_delay: float) -> tuple[str | None, float, str | None]:
+async def run_concurrent(
+    prompt: str, guardrail_delay: float
+) -> tuple[str | None, float, str | None]:
     """CONCURRENT: Guardrail runs alongside LLM, can cancel on failure."""
     guardrail = AsyncGuardrailMiddleware(
         guardrail=SlowSafetyCheck(delay=guardrail_delay),
@@ -100,7 +100,13 @@ async def main() -> None:
 
     while True:
         try:
-            mode_name = "BLOCKING" if mode == GuardrailTiming.BLOCKING else "CONCURRENT" if mode == GuardrailTiming.CONCURRENT else "ASYNC_POST"
+            mode_name = (
+                "BLOCKING"
+                if mode == GuardrailTiming.BLOCKING
+                else "CONCURRENT"
+                if mode == GuardrailTiming.CONCURRENT
+                else "ASYNC_POST"
+            )
             prompt = input(f"[{mode_name} | {guardrail_delay}s] > ").strip()
         except (EOFError, KeyboardInterrupt):
             print("\nBye!")

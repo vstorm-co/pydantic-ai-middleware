@@ -11,8 +11,8 @@ import pytest
 from pydantic_ai_middleware import (
     AgentMiddleware,
     AsyncGuardrailMiddleware,
-    GuardrailTiming,
     GuardrailTimeout,
+    GuardrailTiming,
     InputBlocked,
 )
 
@@ -29,18 +29,14 @@ class SlowGuardrail(AgentMiddleware[None]):
         self.after_tool_called = False
         self.before_model_called = False
 
-    async def before_run(
-        self, prompt: str | Sequence[Any], deps: None
-    ) -> str | Sequence[Any]:
+    async def before_run(self, prompt: str | Sequence[Any], deps: None) -> str | Sequence[Any]:
         await asyncio.sleep(self.delay)
         self.before_run_called = True
         if self.should_fail:
             raise InputBlocked("Guardrail blocked")
         return prompt
 
-    async def after_run(
-        self, prompt: str | Sequence[Any], output: Any, deps: None
-    ) -> Any:
+    async def after_run(self, prompt: str | Sequence[Any], output: Any, deps: None) -> Any:
         await asyncio.sleep(self.delay)
         self.after_run_called = True
         if self.should_fail:
@@ -78,15 +74,11 @@ class PassThroughGuardrail(AgentMiddleware[None]):
         self.before_run_count = 0
         self.after_run_count = 0
 
-    async def before_run(
-        self, prompt: str | Sequence[Any], deps: None
-    ) -> str | Sequence[Any]:
+    async def before_run(self, prompt: str | Sequence[Any], deps: None) -> str | Sequence[Any]:
         self.before_run_count += 1
         return prompt
 
-    async def after_run(
-        self, prompt: str | Sequence[Any], output: Any, deps: None
-    ) -> Any:
+    async def after_run(self, prompt: str | Sequence[Any], output: Any, deps: None) -> Any:
         self.after_run_count += 1
         return output
 
@@ -107,18 +99,14 @@ class TestAsyncGuardrailInit:
     def test_init_with_blocking_timing(self) -> None:
         """Test initialization with blocking timing."""
         guardrail = PassThroughGuardrail()
-        async_mw = AsyncGuardrailMiddleware(
-            guardrail=guardrail, timing=GuardrailTiming.BLOCKING
-        )
+        async_mw = AsyncGuardrailMiddleware(guardrail=guardrail, timing=GuardrailTiming.BLOCKING)
 
         assert async_mw.timing == GuardrailTiming.BLOCKING
 
     def test_init_with_async_post_timing(self) -> None:
         """Test initialization with async_post timing."""
         guardrail = PassThroughGuardrail()
-        async_mw = AsyncGuardrailMiddleware(
-            guardrail=guardrail, timing=GuardrailTiming.ASYNC_POST
-        )
+        async_mw = AsyncGuardrailMiddleware(guardrail=guardrail, timing=GuardrailTiming.ASYNC_POST)
 
         assert async_mw.timing == GuardrailTiming.ASYNC_POST
 
@@ -139,9 +127,7 @@ class TestAsyncGuardrailInit:
     def test_init_cancel_on_failure_false(self) -> None:
         """Test initialization with cancel_on_failure=False."""
         guardrail = PassThroughGuardrail()
-        async_mw = AsyncGuardrailMiddleware(
-            guardrail=guardrail, cancel_on_failure=False
-        )
+        async_mw = AsyncGuardrailMiddleware(guardrail=guardrail, cancel_on_failure=False)
 
         assert async_mw.cancel_on_failure is False
 
@@ -162,9 +148,7 @@ class TestAsyncGuardrailBlockingMode:
     async def test_blocking_mode_waits(self) -> None:
         """Test that blocking mode waits for guardrail to complete."""
         guardrail = SlowGuardrail(delay=0.1)
-        async_mw = AsyncGuardrailMiddleware(
-            guardrail=guardrail, timing=GuardrailTiming.BLOCKING
-        )
+        async_mw = AsyncGuardrailMiddleware(guardrail=guardrail, timing=GuardrailTiming.BLOCKING)
 
         start = asyncio.get_event_loop().time()
         result = await async_mw.before_run("test", None)
@@ -177,9 +161,7 @@ class TestAsyncGuardrailBlockingMode:
     async def test_blocking_mode_raises_on_failure(self) -> None:
         """Test that blocking mode raises when guardrail fails."""
         guardrail = SlowGuardrail(delay=0.01, should_fail=True)
-        async_mw = AsyncGuardrailMiddleware(
-            guardrail=guardrail, timing=GuardrailTiming.BLOCKING
-        )
+        async_mw = AsyncGuardrailMiddleware(guardrail=guardrail, timing=GuardrailTiming.BLOCKING)
 
         with pytest.raises(InputBlocked, match="Guardrail blocked"):
             await async_mw.before_run("test", None)
@@ -199,9 +181,7 @@ class TestAsyncGuardrailBlockingMode:
     async def test_blocking_mode_passes_tool_calls(self) -> None:
         """Test that blocking mode passes through tool call hooks."""
         guardrail = SlowGuardrail(delay=0.01)
-        async_mw = AsyncGuardrailMiddleware(
-            guardrail=guardrail, timing=GuardrailTiming.BLOCKING
-        )
+        async_mw = AsyncGuardrailMiddleware(guardrail=guardrail, timing=GuardrailTiming.BLOCKING)
 
         await async_mw.before_tool_call("tool", {}, None)
         await async_mw.after_tool_call("tool", {}, "result", None)
@@ -212,9 +192,7 @@ class TestAsyncGuardrailBlockingMode:
     async def test_blocking_mode_passes_model_request(self) -> None:
         """Test that blocking mode passes through model request hook."""
         guardrail = SlowGuardrail(delay=0.01)
-        async_mw = AsyncGuardrailMiddleware(
-            guardrail=guardrail, timing=GuardrailTiming.BLOCKING
-        )
+        async_mw = AsyncGuardrailMiddleware(guardrail=guardrail, timing=GuardrailTiming.BLOCKING)
 
         await async_mw.before_model_request([], None)
 
@@ -227,9 +205,7 @@ class TestAsyncGuardrailConcurrentMode:
     async def test_concurrent_mode_returns_immediately(self) -> None:
         """Test that concurrent mode returns immediately."""
         guardrail = SlowGuardrail(delay=0.5)
-        async_mw = AsyncGuardrailMiddleware(
-            guardrail=guardrail, timing=GuardrailTiming.CONCURRENT
-        )
+        async_mw = AsyncGuardrailMiddleware(guardrail=guardrail, timing=GuardrailTiming.CONCURRENT)
 
         start = asyncio.get_event_loop().time()
         result = await async_mw.before_run("test", None)
@@ -242,9 +218,7 @@ class TestAsyncGuardrailConcurrentMode:
     async def test_concurrent_mode_checks_on_after_run(self) -> None:
         """Test that concurrent mode checks guardrail result in after_run."""
         guardrail = SlowGuardrail(delay=0.1)
-        async_mw = AsyncGuardrailMiddleware(
-            guardrail=guardrail, timing=GuardrailTiming.CONCURRENT
-        )
+        async_mw = AsyncGuardrailMiddleware(guardrail=guardrail, timing=GuardrailTiming.CONCURRENT)
 
         await async_mw.before_run("test", None)
         # Wait for after_run which waits for the guardrail
@@ -296,9 +270,7 @@ class TestAsyncGuardrailConcurrentMode:
     async def test_concurrent_mode_skips_tool_calls(self) -> None:
         """Test that concurrent mode skips tool call hooks."""
         guardrail = SlowGuardrail(delay=0.01)
-        async_mw = AsyncGuardrailMiddleware(
-            guardrail=guardrail, timing=GuardrailTiming.CONCURRENT
-        )
+        async_mw = AsyncGuardrailMiddleware(guardrail=guardrail, timing=GuardrailTiming.CONCURRENT)
 
         result = await async_mw.before_tool_call("tool", {"arg": 1}, None)
         assert result == {"arg": 1}
@@ -307,9 +279,7 @@ class TestAsyncGuardrailConcurrentMode:
     async def test_concurrent_mode_skips_model_request(self) -> None:
         """Test that concurrent mode skips model request hook."""
         guardrail = SlowGuardrail(delay=0.01)
-        async_mw = AsyncGuardrailMiddleware(
-            guardrail=guardrail, timing=GuardrailTiming.CONCURRENT
-        )
+        async_mw = AsyncGuardrailMiddleware(guardrail=guardrail, timing=GuardrailTiming.CONCURRENT)
 
         result = await async_mw.before_model_request([], None)
         assert result == []
@@ -318,9 +288,7 @@ class TestAsyncGuardrailConcurrentMode:
     async def test_concurrent_mode_skips_after_tool_call(self) -> None:
         """Test that concurrent mode skips after_tool_call hook."""
         guardrail = SlowGuardrail(delay=0.01)
-        async_mw = AsyncGuardrailMiddleware(
-            guardrail=guardrail, timing=GuardrailTiming.CONCURRENT
-        )
+        async_mw = AsyncGuardrailMiddleware(guardrail=guardrail, timing=GuardrailTiming.CONCURRENT)
 
         result = await async_mw.after_tool_call("tool", {"arg": 1}, "result", None)
         assert result == "result"
@@ -333,9 +301,7 @@ class TestAsyncGuardrailAsyncPostMode:
     async def test_async_post_mode_skips_before_run(self) -> None:
         """Test that async_post mode skips before_run."""
         guardrail = PassThroughGuardrail()
-        async_mw = AsyncGuardrailMiddleware(
-            guardrail=guardrail, timing=GuardrailTiming.ASYNC_POST
-        )
+        async_mw = AsyncGuardrailMiddleware(guardrail=guardrail, timing=GuardrailTiming.ASYNC_POST)
 
         result = await async_mw.before_run("test", None)
 
@@ -345,9 +311,7 @@ class TestAsyncGuardrailAsyncPostMode:
     async def test_async_post_mode_fires_in_after_run(self) -> None:
         """Test that async_post mode launches guardrail in after_run."""
         guardrail = SlowGuardrail(delay=0.1)
-        async_mw = AsyncGuardrailMiddleware(
-            guardrail=guardrail, timing=GuardrailTiming.ASYNC_POST
-        )
+        async_mw = AsyncGuardrailMiddleware(guardrail=guardrail, timing=GuardrailTiming.ASYNC_POST)
 
         await async_mw.before_run("test", None)
         result = await async_mw.after_run("test", "output", None)
@@ -362,9 +326,7 @@ class TestAsyncGuardrailAsyncPostMode:
     async def test_async_post_mode_doesnt_block_on_failure(self) -> None:
         """Test that async_post mode doesn't block on guardrail failure."""
         guardrail = SlowGuardrail(delay=0.05, should_fail=True)
-        async_mw = AsyncGuardrailMiddleware(
-            guardrail=guardrail, timing=GuardrailTiming.ASYNC_POST
-        )
+        async_mw = AsyncGuardrailMiddleware(guardrail=guardrail, timing=GuardrailTiming.ASYNC_POST)
 
         await async_mw.before_run("test", None)
         # Should not raise even though guardrail will fail
@@ -394,9 +356,7 @@ class TestAsyncGuardrailStateReset:
     async def test_state_resets_between_runs(self) -> None:
         """Test that internal state resets between runs."""
         guardrail = SlowGuardrail(delay=0.05)
-        async_mw = AsyncGuardrailMiddleware(
-            guardrail=guardrail, timing=GuardrailTiming.CONCURRENT
-        )
+        async_mw = AsyncGuardrailMiddleware(guardrail=guardrail, timing=GuardrailTiming.CONCURRENT)
 
         # First run
         await async_mw.before_run("test1", None)
@@ -418,9 +378,7 @@ class TestAsyncGuardrailIntegration:
     async def test_concurrent_saves_time_on_success(self) -> None:
         """Test that concurrent mode saves time when guardrail passes."""
         guardrail = SlowGuardrail(delay=0.2)
-        async_mw = AsyncGuardrailMiddleware(
-            guardrail=guardrail, timing=GuardrailTiming.CONCURRENT
-        )
+        async_mw = AsyncGuardrailMiddleware(guardrail=guardrail, timing=GuardrailTiming.CONCURRENT)
 
         async def simulate_llm_call():
             await asyncio.sleep(0.3)
@@ -447,9 +405,7 @@ class TestAsyncGuardrailIntegration:
         """Test that concurrent mode saves time when guardrail fails early."""
         # Guardrail fails fast (0.1s), LLM would take longer
         guardrail = SlowGuardrail(delay=0.1, should_fail=True)
-        async_mw = AsyncGuardrailMiddleware(
-            guardrail=guardrail, timing=GuardrailTiming.CONCURRENT
-        )
+        async_mw = AsyncGuardrailMiddleware(guardrail=guardrail, timing=GuardrailTiming.CONCURRENT)
 
         start = asyncio.get_event_loop().time()
 
@@ -540,9 +496,7 @@ class TestAsyncGuardrailIntegration:
     async def test_concurrent_after_run_without_task(self) -> None:
         """Test concurrent after_run when no task was started (edge case)."""
         guardrail = PassThroughGuardrail()
-        async_mw = AsyncGuardrailMiddleware(
-            guardrail=guardrail, timing=GuardrailTiming.CONCURRENT
-        )
+        async_mw = AsyncGuardrailMiddleware(guardrail=guardrail, timing=GuardrailTiming.CONCURRENT)
 
         # Skip before_run, call after_run directly
         # This tests the case where _guardrail_task is None
@@ -552,9 +506,7 @@ class TestAsyncGuardrailIntegration:
     async def test_concurrent_with_cancelled_task(self) -> None:
         """Test concurrent mode when guardrail task is cancelled externally."""
         guardrail = SlowGuardrail(delay=1.0)
-        async_mw = AsyncGuardrailMiddleware(
-            guardrail=guardrail, timing=GuardrailTiming.CONCURRENT
-        )
+        async_mw = AsyncGuardrailMiddleware(guardrail=guardrail, timing=GuardrailTiming.CONCURRENT)
 
         await async_mw.before_run("test", None)
 

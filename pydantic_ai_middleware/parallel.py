@@ -308,18 +308,12 @@ class ParallelMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
         RACE: Cancel remaining after first completion (success or failure).
         """
         # Wrap coroutines in tasks so we can cancel them
-        pending: set[asyncio.Task[Any]] = {
-            asyncio.create_task(coro) for coro in tasks
-        }
+        pending: set[asyncio.Task[Any]] = {asyncio.create_task(coro) for coro in tasks}
         results: list[tuple[bool, Any]] = []
         should_cancel = False
 
         try:
-            deadline = (
-                asyncio.get_event_loop().time() + self.timeout
-                if self.timeout
-                else None
-            )
+            deadline = asyncio.get_event_loop().time() + self.timeout if self.timeout else None
 
             while pending:
                 # Calculate remaining timeout

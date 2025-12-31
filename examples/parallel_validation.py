@@ -24,9 +24,7 @@ from pydantic_ai_middleware import (
 class ProfanityFilter(AgentMiddleware[None]):
     """Checks for blocked words (simulates 0.3s API call)."""
 
-    async def before_run(
-        self, prompt: str | Sequence[Any], deps: None
-    ) -> str | Sequence[Any]:
+    async def before_run(self, prompt: str | Sequence[Any], deps: None) -> str | Sequence[Any]:
         await asyncio.sleep(0.3)
         if isinstance(prompt, str):
             blocked = {"badword", "offensive"}
@@ -38,9 +36,7 @@ class ProfanityFilter(AgentMiddleware[None]):
 class PIIDetector(AgentMiddleware[None]):
     """Checks for email/phone (simulates 1.0s API call)."""
 
-    async def before_run(
-        self, prompt: str | Sequence[Any], deps: None
-    ) -> str | Sequence[Any]:
+    async def before_run(self, prompt: str | Sequence[Any], deps: None) -> str | Sequence[Any]:
         await asyncio.sleep(5.0)
         if isinstance(prompt, str):
             if re.search(r"\b[\w.-]+@[\w.-]+\.\w+\b", prompt):
@@ -53,9 +49,7 @@ class PIIDetector(AgentMiddleware[None]):
 class InjectionGuard(AgentMiddleware[None]):
     """Checks for prompt injection (simulates 0.5s API call)."""
 
-    async def before_run(
-        self, prompt: str | Sequence[Any], deps: None
-    ) -> str | Sequence[Any]:
+    async def before_run(self, prompt: str | Sequence[Any], deps: None) -> str | Sequence[Any]:
         await asyncio.sleep(0.5)
         if isinstance(prompt, str):
             patterns = ["ignore previous", "disregard", "you are now"]
@@ -84,7 +78,9 @@ async def run_sequential(prompt: str) -> tuple[str | None, float, str | None]:
         return None, time.time() - start, e.reason
 
 
-async def run_parallel(prompt: str, strategy: AggregationStrategy) -> tuple[str | None, float, str | None]:
+async def run_parallel(
+    prompt: str, strategy: AggregationStrategy
+) -> tuple[str | None, float, str | None]:
     """Run with parallel middleware."""
     parallel = ParallelMiddleware(
         middleware=[ProfanityFilter(), PIIDetector(), InjectionGuard()],
@@ -160,7 +156,7 @@ async def main() -> None:
             strategy = AggregationStrategy.FIRST_SUCCESS
             print("✓ Using FIRST_SUCCESS (cancel on first success)\n")
             continue
-        
+
         if prompt.lower() == "/strategy race":
             strategy = AggregationStrategy.RACE
             print("✓ Using RACE (first to finish wins)\n")
