@@ -80,6 +80,7 @@ nav:
     - concepts/middleware.md
     - concepts/hooks.md
     - concepts/decorators.md
+    - concepts/parallel-execution.md
   - Examples:
     - examples/index.md
     - examples/logging.md

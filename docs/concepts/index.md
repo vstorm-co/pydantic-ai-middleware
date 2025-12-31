@@ -63,3 +63,4 @@ async def log_input(prompt, deps):
 - [Middleware](middleware.md) - Deep dive into middleware
 - [Hooks](hooks.md) - All available lifecycle hooks
 - [Decorators](decorators.md) - Decorator-based middleware
+- [Parallel Execution](parallel-execution.md) - Run middleware in parallel
