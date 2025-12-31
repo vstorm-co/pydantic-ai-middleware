@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Parallel Execution** - `ParallelMiddleware` for running multiple middleware concurrently
+  - `AggregationStrategy` enum: `ALL_MUST_PASS`, `FIRST_SUCCESS`, `RACE`, `COLLECT_ALL`
+  - Early cancellation: remaining tasks are cancelled when result is determined
+  - Configurable timeout support
+- **Async Guardrails** - `AsyncGuardrailMiddleware` for concurrent guardrail + LLM execution
+  - `GuardrailTiming` enum: `BLOCKING`, `CONCURRENT`, `ASYNC_POST`
+  - `cancel_on_failure` option to short-circuit LLM calls when guardrail fails
+  - Background task management for async post-processing
+- New exceptions:
+  - `ParallelExecutionFailed` - When parallel execution fails
+  - `GuardrailTimeout` - When guardrail times out
+  - `AggregationFailed` - When result aggregation fails
+
 ## [0.1.0] - 2024-12-29
 
 ### Added

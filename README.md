@@ -20,6 +20,8 @@ Simple middleware library for [Pydantic-AI](https://github.com/pydantic/pydantic
 - **No Imposed Structure** - You decide what to do (logging, guardrails, metrics, transformations)
 - **Full Control** - Modify prompts, outputs, tool calls, and handle errors
 - **Decorator Support** - Simple decorators for quick middleware creation
+- **Parallel Execution** - Run multiple middleware concurrently with early cancellation
+- **Async Guardrails** - Run guardrails concurrently with LLM calls
 - **Type Safe** - Full typing support with generics for dependencies
 
 ## Installation
@@ -85,6 +87,67 @@ result = await agent.run("Hello, how are you?")
 | `before_tool_call` | Before tool execution | Tool arguments |
 | `after_tool_call` | After tool execution | Tool result |
 | `on_error` | When error occurs | Exception |
+
+## Parallel Execution
+
+Run multiple middleware concurrently with `ParallelMiddleware`:
+
+```python
+from pydantic_ai_middleware import ParallelMiddleware, AggregationStrategy
+
+# Run 3 validators in parallel instead of sequentially
+parallel_validators = ParallelMiddleware(
+    middleware=[
+        ProfanityFilter(),      # 0.3s
+        PIIDetector(),          # 0.5s  
+        InjectionGuard(),       # 0.3s
+    ],
+    strategy=AggregationStrategy.ALL_MUST_PASS,
+)
+
+agent = MiddlewareAgent(
+    agent=base_agent,
+    middleware=[parallel_validators],
+)
+
+# Sequential: 0.3 + 0.5 + 0.3 = 1.1s
+# Parallel:   max(0.3, 0.5, 0.3) = 0.5s with early cancellation on failure
+```
+
+### Aggregation Strategies
+
+| Strategy | Behavior |
+|----------|----------|
+| `ALL_MUST_PASS` | All must succeed; cancels remaining on first failure |
+| `FIRST_SUCCESS` | Returns first success; cancels remaining tasks |
+| `RACE` | Returns first completion (success or failure) |
+| `COLLECT_ALL` | Waits for all results |
+
+## Async Guardrails
+
+Run guardrails concurrently with LLM calls using `AsyncGuardrailMiddleware`:
+
+```python
+from pydantic_ai_middleware import AsyncGuardrailMiddleware, GuardrailTiming
+
+# Run safety check in parallel with LLM - cancel LLM if guardrail fails
+guardrail = AsyncGuardrailMiddleware(
+    guardrail=SafetyChecker(),
+    timing=GuardrailTiming.CONCURRENT,
+    cancel_on_failure=True,
+)
+
+# If guardrail fails at 0.5s while LLM is still running,
+# the LLM call is cancelled immediately, saving time and costs
+```
+
+### Timing Modes
+
+| Mode | Behavior |
+|------|----------|
+| `BLOCKING` | Guardrail completes before LLM starts |
+| `CONCURRENT` | Guardrail runs alongside LLM; can cancel on failure |
+| `ASYNC_POST` | Guardrail runs in background after response |
 
 ## Decorator Syntax
 
@@ -319,7 +382,7 @@ class AuditGuardrail(AgentMiddleware[MyDeps]):
 | Flexibility | Maximum | Constrained by design |
 | Learning curve | Flat | Steeper |
 | Built-in guardrails | None (you build what you need) | Pre-built (PII, moderation) |
-| Parallel execution | Manual (use asyncio) | Often built-in |
+| Parallel execution | Built-in with early cancellation | Often built-in |
 | Type safety | Full generics support | Varies |
 
 ### When to Use This Library
