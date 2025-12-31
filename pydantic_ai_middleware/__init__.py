@@ -8,6 +8,7 @@ in the execution lifecycle.
 from __future__ import annotations
 
 from .agent import MiddlewareAgent
+from .async_guardrail import AsyncGuardrailMiddleware
 from .base import AgentMiddleware
 from .decorators import (
     after_run,
@@ -17,7 +18,17 @@ from .decorators import (
     before_tool_call,
     on_error,
 )
-from .exceptions import InputBlocked, MiddlewareError, OutputBlocked, ToolBlocked
+from .exceptions import (
+    AggregationFailed,
+    GuardrailTimeout,
+    InputBlocked,
+    MiddlewareError,
+    OutputBlocked,
+    ParallelExecutionFailed,
+    ToolBlocked,
+)
+from .parallel import ParallelMiddleware
+from .strategies import AggregationStrategy, GuardrailTiming
 from .toolset import MiddlewareToolset
 
 __version__ = "0.1.0"
@@ -27,6 +38,12 @@ __all__ = [
     "AgentMiddleware",
     "MiddlewareAgent",
     "MiddlewareToolset",
+    # Parallel execution
+    "ParallelMiddleware",
+    "AsyncGuardrailMiddleware",
+    # Strategies
+    "AggregationStrategy",
+    "GuardrailTiming",
     # Decorators
     "before_run",
     "after_run",
@@ -39,4 +56,7 @@ __all__ = [
     "InputBlocked",
     "ToolBlocked",
     "OutputBlocked",
+    "ParallelExecutionFailed",
+    "GuardrailTimeout",
+    "AggregationFailed",
 ]
