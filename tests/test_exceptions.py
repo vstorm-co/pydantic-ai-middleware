@@ -4,7 +4,16 @@ from __future__ import annotations
 
 import pytest
 
-from pydantic_ai_middleware import InputBlocked, MiddlewareError, OutputBlocked, ToolBlocked
+from pydantic_ai_middleware import (
+    AggregationFailed,
+    AggregationStrategy,
+    GuardrailTimeout,
+    InputBlocked,
+    MiddlewareError,
+    OutputBlocked,
+    ParallelExecutionFailed,
+    ToolBlocked,
+)
 
 
 class TestMiddlewareError:
@@ -70,6 +79,84 @@ class TestOutputBlocked:
         assert str(error) == "Contains PII"
 
 
+class TestParallelExecutionFailed:
+    """Tests for ParallelExecutionFailed exception."""
+
+    def test_parallel_execution_failed_basic(self) -> None:
+        """Test ParallelExecutionFailed with basic parameters."""
+        errors = [ValueError("error1"), ValueError("error2")]
+        error = ParallelExecutionFailed(errors=errors)
+
+        assert error.errors == errors
+        assert error.failed_count == 2
+        assert error.success_count == 0
+        assert "2 failed" in str(error)
+        assert isinstance(error, MiddlewareError)
+
+    def test_parallel_execution_failed_with_results(self) -> None:
+        """Test ParallelExecutionFailed with results."""
+        errors = [ValueError("error1")]
+        results = ["success1", "success2"]
+        error = ParallelExecutionFailed(errors=errors, results=results)
+
+        assert error.errors == errors
+        assert error.results == results
+        assert error.failed_count == 1
+        assert error.success_count == 2
+        assert "1 failed" in str(error)
+        assert "2 succeeded" in str(error)
+
+    def test_parallel_execution_failed_custom_message(self) -> None:
+        """Test ParallelExecutionFailed with custom message."""
+        errors = [ValueError("error1")]
+        error = ParallelExecutionFailed(errors=errors, message="Custom failure")
+
+        assert "Custom failure" in str(error)
+
+
+class TestGuardrailTimeout:
+    """Tests for GuardrailTimeout exception."""
+
+    def test_guardrail_timeout_basic(self) -> None:
+        """Test GuardrailTimeout with basic parameters."""
+        error = GuardrailTimeout("my_guardrail", 5.0)
+
+        assert error.guardrail_name == "my_guardrail"
+        assert error.timeout == 5.0
+        assert "my_guardrail" in str(error)
+        assert "5.00s" in str(error)
+        assert isinstance(error, MiddlewareError)
+
+
+class TestAggregationFailed:
+    """Tests for AggregationFailed exception."""
+
+    def test_aggregation_failed_basic(self) -> None:
+        """Test AggregationFailed with basic parameters."""
+        error = AggregationFailed(
+            strategy=AggregationStrategy.FIRST_SUCCESS,
+            reason="All middleware failed",
+        )
+
+        assert error.strategy == AggregationStrategy.FIRST_SUCCESS
+        assert error.reason == "All middleware failed"
+        assert "first_success" in str(error)
+        assert "All middleware failed" in str(error)
+        assert isinstance(error, MiddlewareError)
+
+    def test_aggregation_failed_with_errors(self) -> None:
+        """Test AggregationFailed with underlying errors."""
+        underlying = [ValueError("err1"), ValueError("err2")]
+        error = AggregationFailed(
+            strategy=AggregationStrategy.ALL_MUST_PASS,
+            reason="Multiple failures",
+            errors=underlying,
+        )
+
+        assert error.errors == underlying
+        assert len(error.errors) == 2
+
+
 class TestExceptionHierarchy:
     """Tests for exception hierarchy."""
 
@@ -78,6 +165,9 @@ class TestExceptionHierarchy:
         assert issubclass(InputBlocked, MiddlewareError)
         assert issubclass(ToolBlocked, MiddlewareError)
         assert issubclass(OutputBlocked, MiddlewareError)
+        assert issubclass(ParallelExecutionFailed, MiddlewareError)
+        assert issubclass(GuardrailTimeout, MiddlewareError)
+        assert issubclass(AggregationFailed, MiddlewareError)
 
     def test_can_catch_all_with_middleware_error(self) -> None:
         """Test that all exceptions can be caught with MiddlewareError."""
@@ -89,3 +179,12 @@ class TestExceptionHierarchy:
 
         with pytest.raises(MiddlewareError):
             raise OutputBlocked()
+
+        with pytest.raises(MiddlewareError):
+            raise ParallelExecutionFailed(errors=[])
+
+        with pytest.raises(MiddlewareError):
+            raise GuardrailTimeout("test", 1.0)
+
+        with pytest.raises(MiddlewareError):
+            raise AggregationFailed(AggregationStrategy.ALL_MUST_PASS, "test")
