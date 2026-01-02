@@ -15,6 +15,7 @@ from pydantic_ai_middleware import (
     AggregationStrategy,
     InputBlocked,
     ParallelMiddleware,
+    ScopedContext,
 )
 
 
@@ -27,12 +28,16 @@ class SlowMiddleware(AgentMiddleware[None]):
         self.before_run_called = False
         self.after_run_called = False
 
-    async def before_run(self, prompt: str | Sequence[Any], deps: None) -> str | Sequence[Any]:
+    async def before_run(
+        self, prompt: str | Sequence[Any], deps: None, ctx: ScopedContext | None = None
+    ) -> str | Sequence[Any]:
         await asyncio.sleep(self.delay)
         self.before_run_called = True
         return f"{self.name}:{prompt}"
 
-    async def after_run(self, prompt: str | Sequence[Any], output: Any, deps: None) -> Any:
+    async def after_run(
+        self, prompt: str | Sequence[Any], output: Any, deps: None, ctx: ScopedContext | None = None
+    ) -> Any:
         await asyncio.sleep(self.delay)
         self.after_run_called = True
         return f"{self.name}:{output}"
@@ -44,10 +49,14 @@ class FailingMiddleware(AgentMiddleware[None]):
     def __init__(self, error_message: str = "Test error") -> None:
         self.error_message = error_message
 
-    async def before_run(self, prompt: str | Sequence[Any], deps: None) -> str | Sequence[Any]:
+    async def before_run(
+        self, prompt: str | Sequence[Any], deps: None, ctx: ScopedContext | None = None
+    ) -> str | Sequence[Any]:
         raise InputBlocked(self.error_message)
 
-    async def after_run(self, prompt: str | Sequence[Any], output: Any, deps: None) -> Any:
+    async def after_run(
+        self, prompt: str | Sequence[Any], output: Any, deps: None, ctx: ScopedContext | None = None
+    ) -> Any:
         raise InputBlocked(self.error_message)
 
 
@@ -58,11 +67,15 @@ class SlowFailingMiddleware(AgentMiddleware[None]):
         self.delay = delay
         self.reason = reason
 
-    async def before_run(self, prompt: str | Sequence[Any], deps: None) -> str | Sequence[Any]:
+    async def before_run(
+        self, prompt: str | Sequence[Any], deps: None, ctx: ScopedContext | None = None
+    ) -> str | Sequence[Any]:
         await asyncio.sleep(self.delay)
         raise InputBlocked(self.reason)
 
-    async def after_run(self, prompt: str | Sequence[Any], output: Any, deps: None) -> Any:
+    async def after_run(
+        self, prompt: str | Sequence[Any], output: Any, deps: None, ctx: ScopedContext | None = None
+    ) -> Any:
         await asyncio.sleep(self.delay)
         raise InputBlocked(self.reason)
 
@@ -78,16 +91,24 @@ class CountingMiddleware(AgentMiddleware[None]):
         self.before_model_count = 0
         self.on_error_count = 0
 
-    async def before_run(self, prompt: str | Sequence[Any], deps: None) -> str | Sequence[Any]:
+    async def before_run(
+        self, prompt: str | Sequence[Any], deps: None, ctx: ScopedContext | None = None
+    ) -> str | Sequence[Any]:
         self.before_run_count += 1
         return prompt
 
-    async def after_run(self, prompt: str | Sequence[Any], output: Any, deps: None) -> Any:
+    async def after_run(
+        self, prompt: str | Sequence[Any], output: Any, deps: None, ctx: ScopedContext | None = None
+    ) -> Any:
         self.after_run_count += 1
         return output
 
     async def before_tool_call(
-        self, tool_name: str, tool_args: dict[str, Any], deps: None
+        self,
+        tool_name: str,
+        tool_args: dict[str, Any],
+        deps: None,
+        ctx: ScopedContext | None = None,
     ) -> dict[str, Any]:
         self.before_tool_count += 1
         return tool_args
@@ -98,17 +119,20 @@ class CountingMiddleware(AgentMiddleware[None]):
         tool_args: dict[str, Any],
         result: Any,
         deps: None,
+        ctx: ScopedContext | None = None,
     ) -> Any:
         self.after_tool_count += 1
         return result
 
     async def before_model_request(
-        self, messages: list[ModelMessage], deps: None
+        self, messages: list[ModelMessage], deps: None, ctx: ScopedContext | None = None
     ) -> list[ModelMessage]:
         self.before_model_count += 1
         return messages
 
-    async def on_error(self, error: Exception, deps: None) -> Exception | None:
+    async def on_error(
+        self, error: Exception, deps: None, ctx: ScopedContext | None = None
+    ) -> Exception | None:
         self.on_error_count += 1
         return None
 
@@ -120,7 +144,9 @@ class ErrorHandlingMiddleware(AgentMiddleware[None]):
         self.should_handle = should_handle
         self.handled_error: Exception | None = None
 
-    async def on_error(self, error: Exception, deps: None) -> Exception | None:
+    async def on_error(
+        self, error: Exception, deps: None, ctx: ScopedContext | None = None
+    ) -> Exception | None:
         self.handled_error = error
         if self.should_handle:
             return ValueError(f"Converted: {error}")
