@@ -12,11 +12,11 @@ from pydantic_ai_middleware import AgentMiddleware
 class LoggingMiddleware(AgentMiddleware[None]):
     """Log agent activity."""
 
-    async def before_run(self, prompt, deps):
+    async def before_run(self, prompt, deps, ctx):
         print(f"Starting with prompt: {prompt}")
         return prompt
 
-    async def after_run(self, prompt, output, deps):
+    async def after_run(self, prompt, output, deps, ctx):
         print(f"Finished with output: {output}")
         return output
 ```
@@ -52,12 +52,12 @@ For simple middleware, use decorators:
 from pydantic_ai_middleware import before_run, after_run
 
 @before_run
-async def log_input(prompt, deps):
+async def log_input(prompt, deps, ctx):
     print(f"Input: {prompt}")
     return prompt
 
 @after_run
-async def log_output(prompt, output, deps):
+async def log_output(prompt, output, deps, ctx):
     print(f"Output: {output}")
     return output
 
@@ -76,7 +76,7 @@ Block unwanted inputs by raising `InputBlocked`:
 from pydantic_ai_middleware import AgentMiddleware, InputBlocked
 
 class ContentFilter(AgentMiddleware[None]):
-    async def before_run(self, prompt, deps):
+    async def before_run(self, prompt, deps, ctx):
         if "forbidden" in prompt.lower():
             raise InputBlocked("Content not allowed")
         return prompt
@@ -92,7 +92,7 @@ from pydantic_ai_middleware import AgentMiddleware, ToolBlocked
 class ToolFilter(AgentMiddleware[None]):
     blocked_tools = {"dangerous_tool", "admin_tool"}
 
-    async def before_tool_call(self, tool_name, tool_args, deps):
+    async def before_tool_call(self, tool_name, tool_args, deps, ctx):
         if tool_name in self.blocked_tools:
             raise ToolBlocked(tool_name, "Tool not allowed")
         return tool_args

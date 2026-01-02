@@ -19,6 +19,7 @@ Simple middleware library for [Pydantic-AI](https://github.com/pydantic/pydantic
 - **Clean Middleware API** - Simple before/after hooks at every lifecycle stage
 - **No Imposed Structure** - You decide what to do (logging, guardrails, metrics, transformations)
 - **Full Control** - Modify prompts, outputs, tool calls, and handle errors
+- **Cross-Middleware Context Sharing** - Share data between hooks with access control
 - **Decorator Support** - Simple decorators for quick middleware creation
 - **Parallel Execution** - Run multiple middleware concurrently with early cancellation
 - **Async Guardrails** - Run guardrails concurrently with LLM calls
@@ -45,7 +46,7 @@ from pydantic_ai_middleware import MiddlewareAgent, AgentMiddleware, InputBlocke
 class SecurityMiddleware(AgentMiddleware[None]):
     """Block dangerous inputs."""
 
-    async def before_run(self, prompt, deps):
+    async def before_run(self, prompt, deps, ctx):
         if "dangerous" in prompt.lower():
             raise InputBlocked("Dangerous content detected")
         return prompt
@@ -53,11 +54,11 @@ class SecurityMiddleware(AgentMiddleware[None]):
 class LoggingMiddleware(AgentMiddleware[None]):
     """Log agent activity."""
 
-    async def before_run(self, prompt, deps):
+    async def before_run(self, prompt, deps, ctx):
         print(f"Starting: {prompt[:50]}...")
         return prompt
 
-    async def after_run(self, prompt, output, deps):
+    async def after_run(self, prompt, output, deps, ctx):
         print(f"Finished: {output}")
         return output
 
@@ -149,6 +150,57 @@ guardrail = AsyncGuardrailMiddleware(
 | `CONCURRENT` | Guardrail runs alongside LLM; can cancel on failure |
 | `ASYNC_POST` | Guardrail runs in background after response |
 
+## Context Sharing
+
+Share data between hooks with access control using the context system:
+
+```python
+import time
+from pydantic_ai_middleware import AgentMiddleware, MiddlewareAgent, MiddlewareContext
+from pydantic_ai_middleware.context import HookType
+
+class MetricsMiddleware(AgentMiddleware[None]):
+    """Track execution metrics across hooks."""
+
+    async def before_run(self, prompt, deps, ctx):
+        if ctx:
+            ctx.set("start_time", time.time())
+            ctx.set("prompt_length", len(prompt))
+        return prompt
+
+    async def after_run(self, prompt, output, deps, ctx):
+        if ctx:
+            # Read from earlier hook
+            start = ctx.get_from(HookType.BEFORE_RUN, "start_time")
+            if start:
+                duration = time.time() - start
+                ctx.set("duration", duration)
+                print(f"Execution time: {duration:.2f}s")
+        return output
+
+# Create context with config
+ctx = MiddlewareContext(config={"app": "myapp", "timeout": 30})
+
+# Pass context to agent
+agent = MiddlewareAgent(
+    agent=base_agent,
+    middleware=[MetricsMiddleware()],
+    context=ctx,  # Enable context sharing
+)
+```
+
+### Access Control
+
+The context system enforces strict access control based on hook execution order:
+
+- **Write Access**: Hooks can only write to their own namespace
+- **Read Access**: Hooks can only read from earlier or same-phase hooks
+
+```
+Hook Order: BEFORE_RUN(1) → BEFORE_MODEL_REQUEST(2) → BEFORE_TOOL_CALL(3) 
+            → AFTER_TOOL_CALL(4) → AFTER_RUN(5) → ON_ERROR(6)
+```
+
 ## Decorator Syntax
 
 For simple cases, use decorators:
@@ -157,17 +209,17 @@ For simple cases, use decorators:
 from pydantic_ai_middleware import before_run, after_run, before_tool_call, ToolBlocked
 
 @before_run
-async def log_input(prompt, deps):
+async def log_input(prompt, deps, ctx):
     print(f"Input: {prompt}")
     return prompt
 
 @after_run
-async def log_output(prompt, output, deps):
+async def log_output(prompt, output, deps, ctx):
     print(f"Output: {output}")
     return output
 
 @before_tool_call
-async def validate_tools(tool_name, tool_args, deps):
+async def validate_tools(tool_name, tool_args, deps, ctx):
     if tool_name == "dangerous_tool":
         raise ToolBlocked(tool_name, "Not allowed")
     return tool_args
@@ -205,7 +257,7 @@ class RateLimitMiddleware(AgentMiddleware[None]):
         self.window = window
         self._calls: list[float] = []
 
-    async def before_run(self, prompt, deps):
+    async def before_run(self, prompt, deps, ctx):
         now = time.time()
         self._calls = [t for t in self._calls if now - t < self.window]
 
@@ -224,7 +276,9 @@ from pydantic_ai_middleware import AgentMiddleware, ToolBlocked
 class ToolAuthMiddleware(AgentMiddleware[MyDeps]):
     dangerous_tools = {"delete_file", "execute_code", "send_email"}
 
-    async def before_tool_call(self, tool_name, tool_args, deps):
+    async def before_tool_call(
+        self, tool_name, tool_args, deps, ctx
+    ):
         if tool_name in self.dangerous_tools:
             if not deps.user.is_admin:
                 raise ToolBlocked(tool_name, "Requires admin privileges")
@@ -237,7 +291,7 @@ class ToolAuthMiddleware(AgentMiddleware[MyDeps]):
 from pydantic_ai_middleware import AgentMiddleware
 
 class ErrorHandlerMiddleware(AgentMiddleware[MyDeps]):
-    async def on_error(self, error, deps):
+    async def on_error(self, error, deps, ctx):
         # Log error
         await error_tracker.report(error, user_id=deps.user_id)
 
@@ -260,7 +314,7 @@ from pydantic_ai_middleware import AgentMiddleware, InputBlocked
 class InputValidationGuardrail(AgentMiddleware[MyDeps]):
     """Validate and sanitize user input before processing."""
 
-    async def before_run(self, prompt, deps):
+    async def before_run(self, prompt, deps, ctx):
         # Check for profanity
         if has_profanity(prompt):
             raise InputBlocked("Inappropriate content detected")
@@ -298,7 +352,7 @@ class ContentModerationGuardrail(AgentMiddleware[None]):
             system_prompt="Analyze if the content is safe. Return is_safe=False for harmful content.",
         )
 
-    async def before_run(self, prompt, deps):
+    async def before_run(self, prompt, deps, ctx):
         result = await self.moderator.run(str(prompt))
         if not result.output.is_safe:
             raise InputBlocked(result.output.reason or "Content not allowed")
@@ -325,12 +379,12 @@ class PIIRedactionGuardrail(AgentMiddleware[None]):
             text = re.sub(pattern, f'[{name.upper()}_REDACTED]', text)
         return text
 
-    async def before_run(self, prompt, deps):
+    async def before_run(self, prompt, deps, ctx):
         if isinstance(prompt, str):
             return self.redact(prompt)
         return prompt
 
-    async def after_run(self, prompt, output, deps):
+    async def after_run(self, prompt, output, deps, ctx):
         if isinstance(output, str):
             return self.redact(output)
         return output
@@ -345,7 +399,7 @@ from pydantic_ai_middleware import AgentMiddleware
 class AuditGuardrail(AgentMiddleware[MyDeps]):
     """Log all agent activity for compliance and debugging."""
 
-    async def before_run(self, prompt, deps):
+    async def before_run(self, prompt, deps, ctx):
         await audit_log.record(
             user_id=deps.user_id,
             action="agent:start",
@@ -354,7 +408,9 @@ class AuditGuardrail(AgentMiddleware[MyDeps]):
         )
         return prompt
 
-    async def before_tool_call(self, tool_name, tool_args, deps):
+    async def before_tool_call(
+        self, tool_name, tool_args, deps, ctx
+    ):
         await audit_log.record(
             user_id=deps.user_id,
             action=f"tool:{tool_name}",
@@ -363,7 +419,7 @@ class AuditGuardrail(AgentMiddleware[MyDeps]):
         )
         return tool_args
 
-    async def after_run(self, prompt, output, deps):
+    async def after_run(self, prompt, output, deps, ctx):
         await audit_log.record(
             user_id=deps.user_id,
             action="agent:complete",

@@ -13,6 +13,7 @@ Pydantic-AI is a powerful framework for building AI agents. However, when you ne
 - **Clean Middleware API** - Simple before/after hooks at every lifecycle stage
 - **No Imposed Structure** - You decide what to do (logging, guardrails, metrics, transformations)
 - **Full Control** - Modify prompts, outputs, tool calls, and handle errors
+- **Context Sharing** - Share data between middleware with access control
 - **Decorator Support** - Simple decorators for quick middleware creation
 - **Type Safe** - Full typing support with generics for dependencies
 
@@ -23,18 +24,24 @@ from pydantic_ai import Agent
 from pydantic_ai_middleware import MiddlewareAgent, AgentMiddleware
 
 class LoggingMiddleware(AgentMiddleware[None]):
-    async def before_run(self, prompt, deps):
+    async def before_run(self, prompt, deps, ctx):
         print(f"Starting: {prompt}")
+        if ctx:
+            ctx.set("logged", True)  # Store data for later hooks
         return prompt
 
-    async def after_run(self, prompt, output, deps):
+    async def after_run(self, prompt, output, deps, ctx):
         print(f"Finished: {output}")
         return output
+
+# Create context with config (optional)
+ctx = MiddlewareContext(config={"log_level": "debug"})
 
 # Wrap your agent with middleware
 agent = MiddlewareAgent(
     agent=Agent('openai:gpt-4o'),
     middleware=[LoggingMiddleware()],
+    context=ctx,
 )
 
 result = await agent.run("Hello!")

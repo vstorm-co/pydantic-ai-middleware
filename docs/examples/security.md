@@ -14,7 +14,7 @@ class InputValidator(AgentMiddleware[None]):
         "jailbreak",
     ]
 
-    async def before_run(self, prompt, deps):
+    async def before_run(self, prompt, deps, ctx):
         prompt_lower = str(prompt).lower()
         for pattern in self.blocked_patterns:
             if pattern in prompt_lower:
@@ -40,7 +40,9 @@ class ToolAuthorization(AgentMiddleware[UserDeps]):
         "send_email": {"admin", "support"},
     }
 
-    async def before_tool_call(self, tool_name, tool_args, deps):
+    async def before_tool_call(
+        self, tool_name, tool_args, deps, ctx
+    ):
         required_roles = self.tool_permissions.get(tool_name, set())
 
         if required_roles and not (deps.roles & required_roles):
@@ -56,12 +58,12 @@ class ToolAuthorization(AgentMiddleware[UserDeps]):
 
 ```python
 class ContentModeration(AgentMiddleware[None]):
-    async def before_run(self, prompt, deps):
+    async def before_run(self, prompt, deps, ctx):
         if await self._is_inappropriate(prompt):
             raise InputBlocked("Content violates guidelines")
         return prompt
 
-    async def after_run(self, prompt, output, deps):
+    async def after_run(self, prompt, output, deps, ctx):
         if await self._is_inappropriate(output):
             return "[Content removed due to policy violation]"
         return output
@@ -83,7 +85,7 @@ class PIIRedaction(AgentMiddleware[None]):
         "ssn": r'\b\d{3}-\d{2}-\d{4}\b',
     }
 
-    async def before_run(self, prompt, deps):
+    async def before_run(self, prompt, deps, ctx):
         return self._redact(str(prompt))
 
     def _redact(self, text):

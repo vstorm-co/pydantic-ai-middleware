@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Context Sharing System** - Share data between middleware hooks with access control
+  - `MiddlewareContext` class for managing shared state across hooks
+  - `ScopedContext` class for enforcing access control based on hook execution order
+  - `HookType` enum defining hook execution order: `BEFORE_RUN(1)` → `BEFORE_MODEL_REQUEST(2)` → `BEFORE_TOOL_CALL(3)` → `AFTER_TOOL_CALL(4)` → `AFTER_RUN(5)` → `ON_ERROR(6)`
+  - Immutable `config` for read-only global settings
+  - Mutable `metadata` for shared state
+  - Namespaced hook storage with strict access control
+  - Hooks can only write to their own namespace
+  - Hooks can only read from earlier or same-phase hooks
+  - Enable context by passing a `MiddlewareContext` instance to `MiddlewareAgent`
 - **Parallel Execution** - `ParallelMiddleware` for running multiple middleware concurrently
   - `AggregationStrategy` enum: `ALL_MUST_PASS`, `FIRST_SUCCESS`, `RACE`, `COLLECT_ALL`
   - Early cancellation: remaining tasks are cancelled when result is determined
@@ -21,6 +31,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `ParallelExecutionFailed` - When parallel execution fails
   - `GuardrailTimeout` - When guardrail times out
   - `AggregationFailed` - When result aggregation fails
+
+### Changed
+
+- **BREAKING**: All hook signatures now include `ctx: ScopedContext | None = None` as the last keyword argument
+  - `before_run(prompt, deps, *, ctx=None)`
+  - `after_run(prompt, output, deps, *, ctx=None)`
+  - `before_model_request(messages, deps, *, ctx=None)`
+  - `before_tool_call(tool_name, tool_args, deps, *, ctx=None)`
+  - `after_tool_call(tool_name, tool_args, tool_result, deps, *, ctx=None)`
+  - `on_error(error, deps, *, ctx=None)`
 
 ## [0.1.0] - 2024-12-29
 
