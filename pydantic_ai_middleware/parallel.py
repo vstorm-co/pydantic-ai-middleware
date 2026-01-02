@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Sequence
-from typing import Any, Generic
+from typing import TYPE_CHECKING, Any, Generic
 
 from pydantic_ai.messages import ModelMessage
 
 from .base import AgentMiddleware, DepsT
 from .exceptions import AggregationFailed
 from .strategies import AggregationStrategy
+
+if TYPE_CHECKING:
+    from .context import ScopedContext
 
 
 class ParallelMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
@@ -99,12 +102,14 @@ class ParallelMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
         self,
         prompt: str | Sequence[Any],
         deps: DepsT | None,
+        ctx: ScopedContext | None = None,
     ) -> str | Sequence[Any]:
         """Execute all middleware before_run hooks in parallel.
 
         Args:
             prompt: The user prompt to validate/transform.
             deps: The agent dependencies.
+            ctx: Scoped context for data sharing.
 
         Returns:
             The (possibly modified) prompt based on aggregation strategy.
@@ -114,7 +119,7 @@ class ParallelMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
             AggregationFailed: If aggregation cannot produce a valid result.
             asyncio.TimeoutError: If timeout is exceeded.
         """
-        tasks = [mw.before_run(prompt, deps) for mw in self.middleware]
+        tasks = [mw.before_run(prompt, deps, ctx) for mw in self.middleware]
         results = await self._execute_parallel(tasks)
         return self._aggregate_results(results, prompt)
 
@@ -123,6 +128,7 @@ class ParallelMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
         prompt: str | Sequence[Any],
         output: Any,
         deps: DepsT | None,
+        ctx: ScopedContext | None = None,
     ) -> Any:
         """Execute all middleware after_run hooks in parallel.
 
@@ -130,6 +136,7 @@ class ParallelMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
             prompt: The original user prompt.
             output: The agent output to validate/transform.
             deps: The agent dependencies.
+            ctx: Scoped context for data sharing.
 
         Returns:
             The (possibly modified) output based on aggregation strategy.
@@ -139,7 +146,7 @@ class ParallelMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
             AggregationFailed: If aggregation cannot produce a valid result.
             asyncio.TimeoutError: If timeout is exceeded.
         """
-        tasks = [mw.after_run(prompt, output, deps) for mw in self.middleware]
+        tasks = [mw.after_run(prompt, output, deps, ctx) for mw in self.middleware]
         results = await self._execute_parallel(tasks)
         return self._aggregate_results(results, output)
 
@@ -147,12 +154,14 @@ class ParallelMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
         self,
         messages: list[ModelMessage],
         deps: DepsT | None,
+        ctx: ScopedContext | None = None,
     ) -> list[ModelMessage]:
         """Execute all middleware before_model_request hooks in parallel.
 
         Args:
             messages: The messages to send to the model.
             deps: The agent dependencies.
+            ctx: Scoped context for data sharing.
 
         Returns:
             The (possibly modified) messages based on aggregation strategy.
@@ -162,7 +171,7 @@ class ParallelMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
             AggregationFailed: If aggregation cannot produce a valid result.
             asyncio.TimeoutError: If timeout is exceeded.
         """
-        tasks = [mw.before_model_request(messages, deps) for mw in self.middleware]
+        tasks = [mw.before_model_request(messages, deps, ctx) for mw in self.middleware]
         results = await self._execute_parallel(tasks)
         return self._aggregate_results(results, messages)
 
@@ -171,6 +180,7 @@ class ParallelMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
         tool_name: str,
         tool_args: dict[str, Any],
         deps: DepsT | None,
+        ctx: ScopedContext | None = None,
     ) -> dict[str, Any]:
         """Execute all middleware before_tool_call hooks in parallel.
 
@@ -178,6 +188,7 @@ class ParallelMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
             tool_name: The name of the tool being called.
             tool_args: The arguments to the tool.
             deps: The agent dependencies.
+            ctx: Scoped context for data sharing.
 
         Returns:
             The (possibly modified) tool arguments based on aggregation strategy.
@@ -187,7 +198,7 @@ class ParallelMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
             AggregationFailed: If aggregation cannot produce a valid result.
             asyncio.TimeoutError: If timeout is exceeded.
         """
-        tasks = [mw.before_tool_call(tool_name, tool_args, deps) for mw in self.middleware]
+        tasks = [mw.before_tool_call(tool_name, tool_args, deps, ctx) for mw in self.middleware]
         results = await self._execute_parallel(tasks)
         return self._aggregate_results(results, tool_args)
 
@@ -197,6 +208,7 @@ class ParallelMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
         tool_args: dict[str, Any],
         result: Any,
         deps: DepsT | None,
+        ctx: ScopedContext | None = None,
     ) -> Any:
         """Execute all middleware after_tool_call hooks in parallel.
 
@@ -205,6 +217,7 @@ class ParallelMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
             tool_args: The arguments that were passed to the tool.
             result: The result from the tool.
             deps: The agent dependencies.
+            ctx: Scoped context for data sharing.
 
         Returns:
             The (possibly modified) result based on aggregation strategy.
@@ -214,7 +227,9 @@ class ParallelMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
             AggregationFailed: If aggregation cannot produce a valid result.
             asyncio.TimeoutError: If timeout is exceeded.
         """
-        tasks = [mw.after_tool_call(tool_name, tool_args, result, deps) for mw in self.middleware]
+        tasks = [
+            mw.after_tool_call(tool_name, tool_args, result, deps, ctx) for mw in self.middleware
+        ]
         results = await self._execute_parallel(tasks)
         return self._aggregate_results(results, result)
 
@@ -222,6 +237,7 @@ class ParallelMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
         self,
         error: Exception,
         deps: DepsT | None,
+        ctx: ScopedContext | None = None,
     ) -> Exception | None:
         """Execute all middleware on_error hooks in parallel.
 
@@ -232,11 +248,12 @@ class ParallelMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
         Args:
             error: The exception that occurred.
             deps: The agent dependencies.
+            ctx: Scoped context for data sharing.
 
         Returns:
             A different exception to raise, or None to re-raise the original.
         """
-        tasks = [mw.on_error(error, deps) for mw in self.middleware]
+        tasks = [mw.on_error(error, deps, ctx) for mw in self.middleware]
 
         # For on_error, we don't use return_exceptions because we want
         # the actual return values (Exception | None), not to catch exceptions

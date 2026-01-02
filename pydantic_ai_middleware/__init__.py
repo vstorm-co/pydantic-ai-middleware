@@ -10,6 +10,12 @@ from __future__ import annotations
 from .agent import MiddlewareAgent
 from .async_guardrail import AsyncGuardrailMiddleware
 from .base import AgentMiddleware
+from .context import (
+    ContextAccessError,
+    HookType,
+    MiddlewareContext,
+    ScopedContext,
+)
 from .decorators import (
     after_run,
     after_tool_call,
@@ -38,6 +44,11 @@ __all__ = [
     "AgentMiddleware",
     "MiddlewareAgent",
     "MiddlewareToolset",
+    # Context
+    "MiddlewareContext",
+    "ScopedContext",
+    "HookType",
+    "ContextAccessError",
     # Parallel execution
     "ParallelMiddleware",
     "AsyncGuardrailMiddleware",

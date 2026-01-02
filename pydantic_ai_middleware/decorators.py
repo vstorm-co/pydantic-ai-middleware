@@ -8,16 +8,35 @@ from typing import Any, TypeVar
 from pydantic_ai.messages import ModelMessage
 
 from .base import AgentMiddleware
+from .context import ScopedContext
 
 DepsT = TypeVar("DepsT")
 
 # Type aliases for middleware functions
-BeforeRunFunc = Callable[[str | Sequence[Any], DepsT | None], Awaitable[str | Sequence[Any]]]
-AfterRunFunc = Callable[[str | Sequence[Any], Any, DepsT | None], Awaitable[Any]]
-BeforeModelRequestFunc = Callable[[list[ModelMessage], DepsT | None], Awaitable[list[ModelMessage]]]
-BeforeToolCallFunc = Callable[[str, dict[str, Any], DepsT | None], Awaitable[dict[str, Any]]]
-AfterToolCallFunc = Callable[[str, dict[str, Any], Any, DepsT | None], Awaitable[Any]]
-OnErrorFunc = Callable[[Exception, DepsT | None], Awaitable[Exception | None]]
+BeforeRunFunc = Callable[
+    [str | Sequence[Any], DepsT | None, ScopedContext | None],
+    Awaitable[str | Sequence[Any]],
+]
+AfterRunFunc = Callable[
+    [str | Sequence[Any], Any, DepsT | None, ScopedContext | None],
+    Awaitable[Any],
+]
+BeforeModelRequestFunc = Callable[
+    [list[ModelMessage], DepsT | None, ScopedContext | None],
+    Awaitable[list[ModelMessage]],
+]
+BeforeToolCallFunc = Callable[
+    [str, dict[str, Any], DepsT | None, ScopedContext | None],
+    Awaitable[dict[str, Any]],
+]
+AfterToolCallFunc = Callable[
+    [str, dict[str, Any], Any, DepsT | None, ScopedContext | None],
+    Awaitable[Any],
+]
+OnErrorFunc = Callable[
+    [Exception, DepsT | None, ScopedContext | None],
+    Awaitable[Exception | None],
+]
 
 
 class _FunctionMiddleware(AgentMiddleware[DepsT]):
@@ -44,9 +63,10 @@ class _FunctionMiddleware(AgentMiddleware[DepsT]):
         self,
         prompt: str | Sequence[Any],
         deps: DepsT | None,
+        ctx: ScopedContext | None = None,
     ) -> str | Sequence[Any]:
         if self._before_run_func is not None:
-            return await self._before_run_func(prompt, deps)
+            return await self._before_run_func(prompt, deps, ctx)
         return prompt
 
     async def after_run(
@@ -54,18 +74,20 @@ class _FunctionMiddleware(AgentMiddleware[DepsT]):
         prompt: str | Sequence[Any],
         output: Any,
         deps: DepsT | None,
+        ctx: ScopedContext | None = None,
     ) -> Any:
         if self._after_run_func is not None:
-            return await self._after_run_func(prompt, output, deps)
+            return await self._after_run_func(prompt, output, deps, ctx)
         return output
 
     async def before_model_request(
         self,
         messages: list[ModelMessage],
         deps: DepsT | None,
+        ctx: ScopedContext | None = None,
     ) -> list[ModelMessage]:
         if self._before_model_request_func is not None:
-            return await self._before_model_request_func(messages, deps)
+            return await self._before_model_request_func(messages, deps, ctx)
         return messages
 
     async def before_tool_call(
@@ -73,9 +95,10 @@ class _FunctionMiddleware(AgentMiddleware[DepsT]):
         tool_name: str,
         tool_args: dict[str, Any],
         deps: DepsT | None,
+        ctx: ScopedContext | None = None,
     ) -> dict[str, Any]:
         if self._before_tool_call_func is not None:
-            return await self._before_tool_call_func(tool_name, tool_args, deps)
+            return await self._before_tool_call_func(tool_name, tool_args, deps, ctx)
         return tool_args
 
     async def after_tool_call(
@@ -84,18 +107,20 @@ class _FunctionMiddleware(AgentMiddleware[DepsT]):
         tool_args: dict[str, Any],
         result: Any,
         deps: DepsT | None,
+        ctx: ScopedContext | None = None,
     ) -> Any:
         if self._after_tool_call_func is not None:
-            return await self._after_tool_call_func(tool_name, tool_args, result, deps)
+            return await self._after_tool_call_func(tool_name, tool_args, result, deps, ctx)
         return result
 
     async def on_error(
         self,
         error: Exception,
         deps: DepsT | None,
+        ctx: ScopedContext | None = None,
     ) -> Exception | None:
         if self._on_error_func is not None:
-            return await self._on_error_func(error, deps)
+            return await self._on_error_func(error, deps, ctx)
         return None
 
 
@@ -107,8 +132,9 @@ def before_run(
     Example:
         ```python
         @before_run
-        async def log_input(prompt: str, deps) -> str:
+        async def log_input(prompt: str, deps, ctx) -> str:
             print(f"Input: {prompt}")
+            ctx.set("logged", True)  # Store data in context
             return prompt
         ```
     """
@@ -123,7 +149,7 @@ def after_run(
     Example:
         ```python
         @after_run
-        async def log_output(prompt: str, output, deps):
+        async def log_output(prompt: str, output, deps, ctx):
             print(f"Output: {output}")
             return output
         ```
@@ -139,7 +165,7 @@ def before_model_request(
     Example:
         ```python
         @before_model_request
-        async def log_messages(messages: list, deps) -> list:
+        async def log_messages(messages: list, deps, ctx) -> list:
             print(f"Sending {len(messages)} messages")
             return messages
         ```
@@ -155,7 +181,7 @@ def before_tool_call(
     Example:
         ```python
         @before_tool_call
-        async def validate_tool(tool_name: str, tool_args: dict, deps) -> dict:
+        async def validate_tool(tool_name: str, tool_args: dict, deps, ctx) -> dict:
             if tool_name == "dangerous_tool":
                 raise ToolBlocked(tool_name, "Not allowed")
             return tool_args
@@ -172,7 +198,7 @@ def after_tool_call(
     Example:
         ```python
         @after_tool_call
-        async def log_tool_result(tool_name: str, tool_args: dict, result, deps):
+        async def log_tool_result(tool_name: str, tool_args: dict, result, deps, ctx):
             print(f"Tool {tool_name} returned: {result}")
             return result
         ```
@@ -188,7 +214,7 @@ def on_error(
     Example:
         ```python
         @on_error
-        async def handle_error(error: Exception, deps) -> Exception | None:
+        async def handle_error(error: Exception, deps, ctx) -> Exception | None:
             print(f"Error occurred: {error}")
             return None  # Re-raise original
         ```
