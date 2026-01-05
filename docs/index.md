@@ -21,7 +21,7 @@ Pydantic-AI is a powerful framework for building AI agents. However, when you ne
 
 ```python
 from pydantic_ai import Agent
-from pydantic_ai_middleware import MiddlewareAgent, AgentMiddleware
+from pydantic_ai_middleware import MiddlewareAgent, AgentMiddleware, MiddlewareContext
 
 class LoggingMiddleware(AgentMiddleware[None]):
     async def before_run(self, prompt, deps, ctx):

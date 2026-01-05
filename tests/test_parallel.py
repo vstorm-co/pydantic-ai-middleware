@@ -13,7 +13,9 @@ from pydantic_ai_middleware import (
     AgentMiddleware,
     AggregationFailed,
     AggregationStrategy,
+    HookType,
     InputBlocked,
+    MiddlewareContext,
     ParallelMiddleware,
     ScopedContext,
 )
@@ -151,6 +153,21 @@ class ErrorHandlingMiddleware(AgentMiddleware[None]):
         if self.should_handle:
             return ValueError(f"Converted: {error}")
         return None
+
+
+class ContextWritingMiddleware(AgentMiddleware[None]):
+    """Middleware that writes to context."""
+
+    def __init__(self, key: str, value: str) -> None:
+        self.key = key
+        self.value = value
+
+    async def before_run(
+        self, prompt: str | Sequence[Any], deps: None, ctx: ScopedContext | None = None
+    ) -> str | Sequence[Any]:
+        if ctx:
+            ctx.set(self.key, self.value)
+        return prompt
 
 
 class TestParallelMiddlewareInit:
@@ -589,3 +606,108 @@ class TestParallelMiddlewareEarlyCancellation:
         assert elapsed >= 0.2
         # Returns list of all results
         assert len(result) == 2
+
+
+class TestParallelMiddlewareContextHandling:
+    """Tests for context handling in ParallelMiddleware."""
+
+    async def test_before_run_without_context(self) -> None:
+        """Test before_run works correctly when ctx=None."""
+        mw1 = CountingMiddleware()
+        mw2 = CountingMiddleware()
+
+        parallel = ParallelMiddleware(middleware=[mw1, mw2])
+
+        # Should work without context
+        result = await parallel.before_run("test", None, ctx=None)
+
+        assert result == "test"
+        assert mw1.before_run_count == 1
+        assert mw2.before_run_count == 1
+
+    async def test_after_run_without_context(self) -> None:
+        """Test after_run works correctly when ctx=None."""
+        mw1 = CountingMiddleware()
+        mw2 = CountingMiddleware()
+
+        parallel = ParallelMiddleware(middleware=[mw1, mw2])
+
+        result = await parallel.after_run("prompt", "output", None, ctx=None)
+
+        assert result == "output"
+        assert mw1.after_run_count == 1
+        assert mw2.after_run_count == 1
+
+    async def test_before_tool_call_without_context(self) -> None:
+        """Test before_tool_call works correctly when ctx=None."""
+        mw1 = CountingMiddleware()
+        mw2 = CountingMiddleware()
+
+        parallel = ParallelMiddleware(middleware=[mw1, mw2])
+
+        result = await parallel.before_tool_call("tool", {"arg": "value"}, None, ctx=None)
+
+        assert result == {"arg": "value"}
+        assert mw1.before_tool_count == 1
+        assert mw2.before_tool_count == 1
+
+    async def test_after_tool_call_without_context(self) -> None:
+        """Test after_tool_call works correctly when ctx=None."""
+        mw1 = CountingMiddleware()
+        mw2 = CountingMiddleware()
+
+        parallel = ParallelMiddleware(middleware=[mw1, mw2])
+
+        result = await parallel.after_tool_call("tool", {"arg": "value"}, "result", None, ctx=None)
+
+        assert result == "result"
+        assert mw1.after_tool_count == 1
+        assert mw2.after_tool_count == 1
+
+    async def test_before_model_request_without_context(self) -> None:
+        """Test before_model_request works correctly when ctx=None."""
+        mw1 = CountingMiddleware()
+        mw2 = CountingMiddleware()
+
+        parallel = ParallelMiddleware(middleware=[mw1, mw2])
+
+        messages: list[ModelMessage] = []
+        result = await parallel.before_model_request(messages, None, ctx=None)
+
+        assert result == []
+        assert mw1.before_model_count == 1
+        assert mw2.before_model_count == 1
+
+    async def test_on_error_without_context(self) -> None:
+        """Test on_error works correctly when ctx=None."""
+        mw1 = CountingMiddleware()
+        mw2 = CountingMiddleware()
+
+        parallel = ParallelMiddleware(middleware=[mw1, mw2])
+
+        error = ValueError("test error")
+        result = await parallel.on_error(error, None, ctx=None)
+
+        assert result is None
+        assert mw1.on_error_count == 1
+        assert mw2.on_error_count == 1
+
+    async def test_context_cloning_and_merging(self) -> None:
+        """Test that contexts are cloned for parallel execution and merged back."""
+        mw1 = ContextWritingMiddleware("mw1_key", "mw1_value")
+        mw2 = ContextWritingMiddleware("mw2_key", "mw2_value")
+
+        parallel = ParallelMiddleware(middleware=[mw1, mw2])
+
+        # Create a context and get a scoped view
+        ctx = MiddlewareContext()
+        scoped = ctx.for_hook(HookType.BEFORE_RUN)
+
+        result = await parallel.before_run("test", None, ctx=scoped)
+
+        assert result == "test"
+
+        # Both middleware should have written to the context, merged back
+        data = ctx._hook_data[HookType.BEFORE_RUN]
+        assert data.get("mw1_key") == "mw1_value"
+        assert data.get("mw2_key") == "mw2_value"

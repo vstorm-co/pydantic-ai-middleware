@@ -35,12 +35,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **BREAKING**: All hook signatures now include `ctx: ScopedContext | None = None` as the last keyword argument
-  - `before_run(prompt, deps, *, ctx=None)`
-  - `after_run(prompt, output, deps, *, ctx=None)`
-  - `before_model_request(messages, deps, *, ctx=None)`
-  - `before_tool_call(tool_name, tool_args, deps, *, ctx=None)`
-  - `after_tool_call(tool_name, tool_args, tool_result, deps, *, ctx=None)`
-  - `on_error(error, deps, *, ctx=None)`
+  - `before_run(prompt, deps, ctx)`
+  - `after_run(prompt, output, deps, ctx)`
+  - `before_model_request(messages, deps, ctx)`
+  - `before_tool_call(tool_name, tool_args, deps, ctx)`
+  - `after_tool_call(tool_name, tool_args, tool_result, deps, ctx)`
+  - `on_error(error, deps, ctx)`
 
 ## [0.1.0] - 2024-12-29
 

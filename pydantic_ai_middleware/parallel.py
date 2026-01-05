@@ -3,17 +3,20 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any, Generic
+from collections.abc import Callable, Coroutine, Sequence
+from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 from pydantic_ai.messages import ModelMessage
 
 from .base import AgentMiddleware, DepsT
+from .context import HookType
 from .exceptions import AggregationFailed
 from .strategies import AggregationStrategy
 
 if TYPE_CHECKING:
     from .context import ScopedContext
+
+T = TypeVar("T")
 
 
 class ParallelMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
@@ -98,6 +101,96 @@ class ParallelMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
             f"timeout={self.timeout})"
         )
 
+    def _create_cloned_contexts(
+        self,
+        ctx: ScopedContext | None,
+        hook: HookType,
+    ) -> list[ScopedContext | None]:
+        """Create cloned contexts for each middleware to prevent race conditions.
+
+        When middleware run in parallel and modify context, they could have race
+        conditions writing to the same dictionary. This method creates isolated
+        clones of the parent MiddlewareContext for each middleware.
+
+        Args:
+            ctx: The original scoped context (may be None).
+            hook: The hook type for creating scoped views.
+
+        Returns:
+            List of cloned contexts (or None values if ctx is None).
+        """
+        if ctx is None:
+            return [None] * len(self.middleware)
+
+        # Clone the context for each middleware to ensure independence
+        return [ctx._parent.clone().for_hook(hook) for _ in self.middleware]
+
+    def _merge_contexts(
+        self,
+        original_ctx: ScopedContext | None,
+        cloned_contexts: list[ScopedContext | None],
+        hook: HookType,
+    ) -> None:
+        """Merge data from cloned contexts back into the original context.
+
+        After parallel execution completes, this merges all data written by
+        each middleware back into the original context's hook namespace.
+
+        Args:
+            original_ctx: The original scoped context to merge into.
+            cloned_contexts: The cloned contexts to merge from.
+            hook: The hook namespace to merge.
+        """
+        if original_ctx is None:
+            return
+
+        parent = original_ctx._parent
+        for cloned_ctx in cloned_contexts:
+            # When original_ctx is not None, cloned contexts are always not None
+            if cloned_ctx is None:  # pragma: no cover
+                continue
+            parent.merge_from(cloned_ctx._parent, hook)
+
+    async def _execute_parallel_with_contexts(
+        self,
+        ctx: ScopedContext | None,
+        hook: HookType,
+        task_factory: Callable[
+            [AgentMiddleware[DepsT], ScopedContext | None], Coroutine[Any, Any, T]
+        ],
+    ) -> list[tuple[bool, T]]:
+        """Execute middleware in parallel with cloned contexts.
+
+        This helper handles:
+        1. Creating cloned contexts for each middleware
+        2. Executing all middleware in parallel
+        3. Merging contexts back after execution
+
+        Args:
+            ctx: The original scoped context.
+            hook: The hook type being executed.
+            task_factory: Function that creates the coroutine for each middleware.
+
+        Returns:
+            List of (success, result_or_exception) tuples.
+        """
+        # Create isolated contexts for each middleware
+        cloned_contexts = self._create_cloned_contexts(ctx, hook)
+
+        # Create tasks with cloned contexts
+        tasks = [
+            task_factory(mw, cloned_ctx)
+            for mw, cloned_ctx in zip(self.middleware, cloned_contexts, strict=True)
+        ]
+
+        # Execute in parallel
+        results = await self._execute_parallel(tasks)
+
+        # Merge contexts back into original
+        self._merge_contexts(ctx, cloned_contexts, hook)
+
+        return results
+
     async def before_run(
         self,
         prompt: str | Sequence[Any],
@@ -119,8 +212,11 @@ class ParallelMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
             AggregationFailed: If aggregation cannot produce a valid result.
             asyncio.TimeoutError: If timeout is exceeded.
         """
-        tasks = [mw.before_run(prompt, deps, ctx) for mw in self.middleware]
-        results = await self._execute_parallel(tasks)
+        results = await self._execute_parallel_with_contexts(
+            ctx,
+            HookType.BEFORE_RUN,
+            lambda mw, cloned_ctx: mw.before_run(prompt, deps, cloned_ctx),
+        )
         return self._aggregate_results(results, prompt)
 
     async def after_run(
@@ -146,8 +242,11 @@ class ParallelMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
             AggregationFailed: If aggregation cannot produce a valid result.
             asyncio.TimeoutError: If timeout is exceeded.
         """
-        tasks = [mw.after_run(prompt, output, deps, ctx) for mw in self.middleware]
-        results = await self._execute_parallel(tasks)
+        results = await self._execute_parallel_with_contexts(
+            ctx,
+            HookType.AFTER_RUN,
+            lambda mw, cloned_ctx: mw.after_run(prompt, output, deps, cloned_ctx),
+        )
         return self._aggregate_results(results, output)
 
     async def before_model_request(
@@ -171,8 +270,11 @@ class ParallelMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
             AggregationFailed: If aggregation cannot produce a valid result.
             asyncio.TimeoutError: If timeout is exceeded.
         """
-        tasks = [mw.before_model_request(messages, deps, ctx) for mw in self.middleware]
-        results = await self._execute_parallel(tasks)
+        results = await self._execute_parallel_with_contexts(
+            ctx,
+            HookType.BEFORE_MODEL_REQUEST,
+            lambda mw, cloned_ctx: mw.before_model_request(messages, deps, cloned_ctx),
+        )
         return self._aggregate_results(results, messages)
 
     async def before_tool_call(
@@ -198,8 +300,11 @@ class ParallelMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
             AggregationFailed: If aggregation cannot produce a valid result.
             asyncio.TimeoutError: If timeout is exceeded.
         """
-        tasks = [mw.before_tool_call(tool_name, tool_args, deps, ctx) for mw in self.middleware]
-        results = await self._execute_parallel(tasks)
+        results = await self._execute_parallel_with_contexts(
+            ctx,
+            HookType.BEFORE_TOOL_CALL,
+            lambda mw, cloned_ctx: mw.before_tool_call(tool_name, tool_args, deps, cloned_ctx),
+        )
         return self._aggregate_results(results, tool_args)
 
     async def after_tool_call(
@@ -227,10 +332,13 @@ class ParallelMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
             AggregationFailed: If aggregation cannot produce a valid result.
             asyncio.TimeoutError: If timeout is exceeded.
         """
-        tasks = [
-            mw.after_tool_call(tool_name, tool_args, result, deps, ctx) for mw in self.middleware
-        ]
-        results = await self._execute_parallel(tasks)
+        results = await self._execute_parallel_with_contexts(
+            ctx,
+            HookType.AFTER_TOOL_CALL,
+            lambda mw, cloned_ctx: mw.after_tool_call(
+                tool_name, tool_args, result, deps, cloned_ctx
+            ),
+        )
         return self._aggregate_results(results, result)
 
     async def on_error(
@@ -253,7 +361,13 @@ class ParallelMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
         Returns:
             A different exception to raise, or None to re-raise the original.
         """
-        tasks = [mw.on_error(error, deps, ctx) for mw in self.middleware]
+        # Create cloned contexts to prevent race conditions
+        cloned_contexts = self._create_cloned_contexts(ctx, HookType.ON_ERROR)
+
+        tasks = [
+            mw.on_error(error, deps, cloned_ctx)
+            for mw, cloned_ctx in zip(self.middleware, cloned_contexts, strict=True)
+        ]
 
         # For on_error, we don't use return_exceptions because we want
         # the actual return values (Exception | None), not to catch exceptions
@@ -265,6 +379,9 @@ class ParallelMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
             )
         else:
             results = await asyncio.gather(*tasks)
+
+        # Merge contexts back into original
+        self._merge_contexts(ctx, cloned_contexts, HookType.ON_ERROR)
 
         # Return first non-None result
         for value in results:
@@ -330,16 +447,18 @@ class ParallelMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
         should_cancel = False
 
         try:
-            deadline = asyncio.get_event_loop().time() + self.timeout if self.timeout else None
+            loop = asyncio.get_event_loop()
+            deadline = loop.time() + self.timeout if self.timeout else None
 
             while pending:
                 # Calculate remaining timeout
                 timeout = None
                 if deadline is not None:
-                    timeout = max(0, deadline - asyncio.get_event_loop().time())
+                    timeout = max(0, deadline - loop.time())
                     if timeout == 0:  # pragma: no cover
                         raise asyncio.TimeoutError()
-
+                    if timeout == 0:  # pragma: no cover
+                        raise asyncio.TimeoutError()
                 done, pending = await asyncio.wait(
                     pending,
                     timeout=timeout,
@@ -371,8 +490,8 @@ class ParallelMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
                         # RACE: cancel on first completion (even failure)
                         if self.strategy == AggregationStrategy.RACE:
                             should_cancel = True
-
-                # Cancel after processing all completed tasks in this batch
+                # If cancellation is needed, cancel all remaining
+                # pending tasks after processing this batch
                 if should_cancel and pending:
                     self._cancel_tasks(pending)
                     break
@@ -449,5 +568,6 @@ class ParallelMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
             # Return all results as-is (caller handles the list)
             return results
 
-        # Should never reach here, but satisfy type checker
-        return default_value  # pragma: no cover
+        raise RuntimeError(  # pragma: no cover
+            "Unexpected aggregation strategy in ParallelMiddleware._aggregate_results"
+        )
