@@ -317,3 +317,127 @@ class TestScopedContextChaining:
         assert mw1_ctx.get("mw1_validated") is True
         assert mw1_ctx.get("mw2_transformed") == "new_prompt"
         assert mw2_ctx.get("mw1_validated") is True
+
+
+class TestContextReset:
+    """Tests for MiddlewareContext reset functionality."""
+
+    def test_reset_clears_metadata(self) -> None:
+        """Test that reset() clears metadata."""
+        ctx = MiddlewareContext()
+        ctx.set_metadata("prompt", "hello")
+        ctx.set_metadata("output", "world")
+
+        assert ctx.metadata["prompt"] == "hello"
+        assert ctx.metadata["output"] == "world"
+
+        ctx.reset()
+
+        assert len(ctx.metadata) == 0
+        assert "prompt" not in ctx.metadata
+        assert "output" not in ctx.metadata
+
+    def test_reset_clears_hook_data(self) -> None:
+        """Test that reset() clears all hook data."""
+        ctx = MiddlewareContext()
+
+        # Set data in multiple hooks
+        ctx._set_hook_data(HookType.BEFORE_RUN, "key1", "value1")
+        ctx._set_hook_data(HookType.AFTER_RUN, "key2", "value2")
+        ctx._set_hook_data(HookType.BEFORE_MODEL_REQUEST, "key3", "value3")
+
+        assert ctx._get_hook_data(HookType.BEFORE_RUN, "key1") == "value1"
+        assert ctx._get_hook_data(HookType.AFTER_RUN, "key2") == "value2"
+        assert ctx._get_hook_data(HookType.BEFORE_MODEL_REQUEST, "key3") == "value3"
+
+        ctx.reset()
+
+        # All data should be cleared
+        assert ctx._get_hook_data(HookType.BEFORE_RUN, "key1") is None
+        assert ctx._get_hook_data(HookType.AFTER_RUN, "key2") is None
+        assert ctx._get_hook_data(HookType.BEFORE_MODEL_REQUEST, "key3") is None
+
+    def test_reset_preserves_config(self) -> None:
+        """Test that reset() preserves configuration."""
+        ctx = MiddlewareContext(config={"rate_limit": 100, "timeout": 30})
+        ctx.set_metadata("run_id", "123")
+        ctx._set_hook_data(HookType.BEFORE_RUN, "data", "value")
+
+        ctx.reset()
+
+        # Config should still be there
+        assert ctx.config["rate_limit"] == 100
+        assert ctx.config["timeout"] == 30
+
+        # Metadata and hook data should be cleared
+        assert len(ctx.metadata) == 0
+        assert ctx._get_hook_data(HookType.BEFORE_RUN, "data") is None
+
+    def test_reset_allows_fresh_state_for_new_run(self) -> None:
+        """Test that reset() enables clean state for new runs."""
+        ctx = MiddlewareContext(config={"mode": "test"})
+
+        # First run
+        ctx.set_metadata("prompt", "first prompt")
+        scoped1 = ctx.for_hook(HookType.BEFORE_RUN)
+        scoped1.set("input_length", 12)
+
+        assert ctx.metadata["prompt"] == "first prompt"
+        assert ctx._get_hook_data(HookType.BEFORE_RUN, "input_length") == 12
+
+        # Reset for second run
+        ctx.reset()
+
+        # Second run should have clean state
+        ctx.set_metadata("prompt", "second prompt")
+        scoped2 = ctx.for_hook(HookType.BEFORE_RUN)
+        scoped2.set("input_length", 14)
+
+        assert ctx.metadata["prompt"] == "second prompt"
+        assert ctx._get_hook_data(HookType.BEFORE_RUN, "input_length") == 14
+        # Should not have data from first run
+        assert not any(k for k in ctx._hook_data[HookType.BEFORE_RUN] if k not in ["input_length"])
+
+    def test_reset_clears_all_hook_types(self) -> None:
+        """Test that reset() clears data from all hook types."""
+        ctx = MiddlewareContext()
+
+        # Set data in all hook types
+        for hook in [
+            HookType.BEFORE_RUN,
+            HookType.BEFORE_MODEL_REQUEST,
+            HookType.BEFORE_TOOL_CALL,
+            HookType.AFTER_TOOL_CALL,
+            HookType.AFTER_RUN,
+            HookType.ON_ERROR,
+        ]:
+            scoped = ctx.for_hook(hook)
+            scoped.set(f"{hook.name}_data", f"{hook.name}_value")
+
+        # Verify all data is set
+        for hook in HookType:
+            assert ctx._get_hook_data(hook, f"{hook.name}_data") == f"{hook.name}_value"
+
+        ctx.reset()
+
+        # Verify all data is cleared
+        for hook in HookType:
+            assert ctx._get_hook_data(hook, f"{hook.name}_data") is None
+
+    def test_reset_multiple_times(self) -> None:
+        """Test that reset() can be called multiple times safely."""
+        ctx = MiddlewareContext(config={"key": "value"})
+
+        # Multiple cycles of set and reset
+        for i in range(3):
+            ctx.set_metadata("run_number", i)
+            ctx._set_hook_data(HookType.BEFORE_RUN, "iteration", i)
+
+            assert ctx.metadata["run_number"] == i
+            assert ctx._get_hook_data(HookType.BEFORE_RUN, "iteration") == i
+
+            ctx.reset()
+
+            assert len(ctx.metadata) == 0
+            assert ctx._get_hook_data(HookType.BEFORE_RUN, "iteration") is None
+            assert ctx.config["key"] == "value"  # Config still there

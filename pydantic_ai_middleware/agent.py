@@ -144,6 +144,8 @@ class MiddlewareAgent(AbstractAgent[AgentDepsT, OutputDataT]):
         """
         if self._context is not None:
             ctx: MiddlewareContext = self._context
+            # Reset context state from previous runs
+            ctx.reset()
             # Set run metadata
             ctx.set_metadata("user_prompt", user_prompt)
         else:
@@ -232,6 +234,8 @@ class MiddlewareAgent(AbstractAgent[AgentDepsT, OutputDataT]):
         # Use provided context or None
         if self._context is not None:
             ctx: MiddlewareContext = self._context
+            # Reset context state from previous runs
+            ctx.reset()
             # Set run metadata
             ctx.set_metadata("user_prompt", user_prompt)
         else:

@@ -290,3 +290,17 @@ class MiddlewareContext:
             hook: The hook namespace to merge.
         """
         self._hook_data[hook].update(other._hook_data[hook])
+
+    def reset(self) -> None:
+        """Reset the context state for a new agent run.
+
+        This clears all per-run state (metadata and hook data) while
+        preserving the immutable configuration. Call this at the start
+        of each agent run to ensure clean state isolation between runs.
+        """
+        # Clear metadata
+        self._metadata.clear()
+
+        # Clear all hook namespaces
+        for hook in HookType:
+            self._hook_data[hook].clear()

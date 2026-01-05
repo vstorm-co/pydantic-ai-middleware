@@ -16,7 +16,8 @@ from .strategies import AggregationStrategy
 if TYPE_CHECKING:
     from .context import ScopedContext
 
-T = TypeVar("T")
+ParallelResultT = TypeVar("ParallelResultT")
+"Type variable for parallel middleware execution results."
 
 
 class ParallelMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
@@ -156,9 +157,9 @@ class ParallelMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
         ctx: ScopedContext | None,
         hook: HookType,
         task_factory: Callable[
-            [AgentMiddleware[DepsT], ScopedContext | None], Coroutine[Any, Any, T]
+            [AgentMiddleware[DepsT], ScopedContext | None], Coroutine[Any, Any, ParallelResultT]
         ],
-    ) -> list[tuple[bool, T]]:
+    ) -> list[tuple[bool, ParallelResultT]]:
         """Execute middleware in parallel with cloned contexts.
 
         This helper handles:
@@ -455,8 +456,6 @@ class ParallelMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
                 timeout = None
                 if deadline is not None:
                     timeout = max(0, deadline - loop.time())
-                    if timeout == 0:  # pragma: no cover
-                        raise asyncio.TimeoutError()
                     if timeout == 0:  # pragma: no cover
                         raise asyncio.TimeoutError()
                 done, pending = await asyncio.wait(
