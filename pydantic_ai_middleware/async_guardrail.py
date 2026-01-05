@@ -5,13 +5,16 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Sequence
-from typing import Any, Generic
+from typing import TYPE_CHECKING, Any, Generic
 
 from pydantic_ai.messages import ModelMessage
 
 from .base import AgentMiddleware, DepsT
 from .exceptions import GuardrailTimeout, InputBlocked
 from .strategies import GuardrailTiming
+
+if TYPE_CHECKING:
+    from .context import ScopedContext
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +93,7 @@ class AsyncGuardrailMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
         self._guardrail_task: asyncio.Task[Any] | None = None
         self._guardrail_prompt: str | Sequence[Any] | None = None
         self._guardrail_error: Exception | None = None
+        self._ctx: ScopedContext | None = None
 
     def __repr__(self) -> str:
         """Return string representation."""
@@ -104,6 +108,7 @@ class AsyncGuardrailMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
         self,
         prompt: str | Sequence[Any],
         deps: DepsT | None,
+        ctx: ScopedContext | None = None,
     ) -> str | Sequence[Any]:
         """Start guardrail check based on timing mode.
 
@@ -114,6 +119,7 @@ class AsyncGuardrailMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
         Args:
             prompt: The user prompt.
             deps: The agent dependencies.
+            ctx: Scoped context for data sharing.
 
         Returns:
             The (possibly modified) prompt.
@@ -126,15 +132,16 @@ class AsyncGuardrailMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
         self._guardrail_task = None
         self._guardrail_prompt = prompt
         self._guardrail_error = None
+        self._ctx = ctx  # Store context for background task
 
         if self.timing == GuardrailTiming.BLOCKING:
             # Traditional blocking behavior - complete before agent starts
-            return await self._run_guardrail_with_timeout(prompt, deps)
+            return await self._run_guardrail_with_timeout(prompt, deps, ctx)
 
         elif self.timing == GuardrailTiming.CONCURRENT:
             # Launch guardrail as background task (don't wait)
             self._guardrail_task = asyncio.create_task(
-                self._run_guardrail_safe(prompt, deps),
+                self._run_guardrail_safe(prompt, deps, ctx),
                 name=f"{self.name}_before_run",
             )
             # Return immediately - guardrail runs in background
@@ -151,6 +158,7 @@ class AsyncGuardrailMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
         prompt: str | Sequence[Any],
         output: Any,
         deps: DepsT | None,
+        ctx: ScopedContext | None = None,
     ) -> Any:
         """Check guardrail result and optionally block output.
 
@@ -162,6 +170,7 @@ class AsyncGuardrailMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
             prompt: The original user prompt.
             output: The agent output.
             deps: The agent dependencies.
+            ctx: Scoped context for data sharing.
 
         Returns:
             The (possibly modified) output.
@@ -203,7 +212,7 @@ class AsyncGuardrailMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
         elif self.timing == GuardrailTiming.ASYNC_POST:
             # Fire-and-forget monitoring - run guardrail on output
             asyncio.create_task(
-                self._run_output_guardrail_safe(prompt, output, deps),
+                self._run_output_guardrail_safe(prompt, output, deps, ctx),
                 name=f"{self.name}_after_run_monitor",
             )
 
@@ -213,6 +222,7 @@ class AsyncGuardrailMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
         self,
         messages: list[ModelMessage],
         deps: DepsT | None,
+        ctx: ScopedContext | None = None,
     ) -> list[ModelMessage]:
         """Pass through to wrapped guardrail for BLOCKING mode only.
 
@@ -222,12 +232,13 @@ class AsyncGuardrailMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
         Args:
             messages: The messages to send to the model.
             deps: The agent dependencies.
+            ctx: Scoped context for data sharing.
 
         Returns:
             The (possibly modified) messages.
         """
         if self.timing == GuardrailTiming.BLOCKING:
-            return await self.guardrail.before_model_request(messages, deps)
+            return await self.guardrail.before_model_request(messages, deps, ctx)
         return messages
 
     async def before_tool_call(
@@ -235,6 +246,7 @@ class AsyncGuardrailMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
         tool_name: str,
         tool_args: dict[str, Any],
         deps: DepsT | None,
+        ctx: ScopedContext | None = None,
     ) -> dict[str, Any]:
         """Pass through to wrapped guardrail for BLOCKING mode only.
 
@@ -242,12 +254,13 @@ class AsyncGuardrailMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
             tool_name: The name of the tool being called.
             tool_args: The arguments to the tool.
             deps: The agent dependencies.
+            ctx: Scoped context for data sharing.
 
         Returns:
             The (possibly modified) tool arguments.
         """
         if self.timing == GuardrailTiming.BLOCKING:
-            return await self.guardrail.before_tool_call(tool_name, tool_args, deps)
+            return await self.guardrail.before_tool_call(tool_name, tool_args, deps, ctx)
         return tool_args
 
     async def after_tool_call(
@@ -256,6 +269,7 @@ class AsyncGuardrailMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
         tool_args: dict[str, Any],
         result: Any,
         deps: DepsT | None,
+        ctx: ScopedContext | None = None,
     ) -> Any:
         """Pass through to wrapped guardrail for BLOCKING mode only.
 
@@ -264,40 +278,45 @@ class AsyncGuardrailMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
             tool_args: The arguments that were passed to the tool.
             result: The result from the tool.
             deps: The agent dependencies.
+            ctx: Scoped context for data sharing.
 
         Returns:
             The (possibly modified) result.
         """
         if self.timing == GuardrailTiming.BLOCKING:
-            return await self.guardrail.after_tool_call(tool_name, tool_args, result, deps)
+            return await self.guardrail.after_tool_call(tool_name, tool_args, result, deps, ctx)
         return result
 
     async def on_error(
         self,
         error: Exception,
         deps: DepsT | None,
+        ctx: ScopedContext | None = None,
     ) -> Exception | None:
         """Pass through to wrapped guardrail.
 
         Args:
             error: The exception that occurred.
             deps: The agent dependencies.
+            ctx: Scoped context for data sharing.
 
         Returns:
             A different exception to raise, or None to re-raise the original.
         """
-        return await self.guardrail.on_error(error, deps)
+        return await self.guardrail.on_error(error, deps, ctx)
 
     async def _run_guardrail_with_timeout(
         self,
         prompt: str | Sequence[Any],
         deps: DepsT | None,
+        ctx: ScopedContext | None = None,
     ) -> str | Sequence[Any]:
         """Run guardrail with optional timeout (for BLOCKING mode).
 
         Args:
             prompt: The user prompt.
             deps: The agent dependencies.
+            ctx: Scoped context for data sharing.
 
         Returns:
             The result from the guardrail.
@@ -308,10 +327,10 @@ class AsyncGuardrailMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
         try:
             if self.timeout is not None:
                 return await asyncio.wait_for(
-                    self.guardrail.before_run(prompt, deps),
+                    self.guardrail.before_run(prompt, deps, ctx),
                     timeout=self.timeout,
                 )
-            return await self.guardrail.before_run(prompt, deps)
+            return await self.guardrail.before_run(prompt, deps, ctx)
         except asyncio.TimeoutError as e:
             raise GuardrailTimeout(self.name, self.timeout or 0) from e
 
@@ -319,6 +338,7 @@ class AsyncGuardrailMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
         self,
         prompt: str | Sequence[Any],
         deps: DepsT | None,
+        ctx: ScopedContext | None = None,
     ) -> str | Sequence[Any]:
         """Run guardrail and capture any errors (for CONCURRENT mode).
 
@@ -328,12 +348,13 @@ class AsyncGuardrailMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
         Args:
             prompt: The user prompt.
             deps: The agent dependencies.
+            ctx: Scoped context for data sharing.
 
         Returns:
             The result from the guardrail (or original prompt on error).
         """
         try:
-            return await self.guardrail.before_run(prompt, deps)
+            return await self.guardrail.before_run(prompt, deps, ctx)
         except Exception as e:
             # Store error for checking in after_run
             self._guardrail_error = e
@@ -345,6 +366,7 @@ class AsyncGuardrailMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
         prompt: str | Sequence[Any],
         output: Any,
         deps: DepsT | None,
+        ctx: ScopedContext | None = None,
     ) -> Any:
         """Run guardrail on output for monitoring (ASYNC_POST mode).
 
@@ -354,6 +376,7 @@ class AsyncGuardrailMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
             prompt: The original user prompt.
             output: The agent output.
             deps: The agent dependencies.
+            ctx: Scoped context for data sharing.
 
         Returns:
             The result from the guardrail (or original output on error).
@@ -361,10 +384,10 @@ class AsyncGuardrailMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
         try:
             if self.timeout is not None:
                 return await asyncio.wait_for(
-                    self.guardrail.after_run(prompt, output, deps),
+                    self.guardrail.after_run(prompt, output, deps, ctx),
                     timeout=self.timeout,
                 )
-            return await self.guardrail.after_run(prompt, output, deps)
+            return await self.guardrail.after_run(prompt, output, deps, ctx)
         except asyncio.TimeoutError:
             logger.warning(f"{self.name}: Post-check guardrail timed out after {self.timeout}s")
             return output

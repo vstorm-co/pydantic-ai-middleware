@@ -13,6 +13,7 @@ from typing_extensions import Self
 
 if TYPE_CHECKING:
     from .base import AgentMiddleware
+    from .context import MiddlewareContext
 
 DepsT = TypeVar("DepsT")
 
@@ -27,6 +28,7 @@ class MiddlewareToolset(WrapperToolset[DepsT], Generic[DepsT]):
 
     wrapped: AbstractToolset[DepsT]
     middleware: list[AgentMiddleware[DepsT]] = field(default_factory=list)
+    ctx: MiddlewareContext | None = None
 
     @property
     def id(self) -> str | None:
@@ -54,19 +56,25 @@ class MiddlewareToolset(WrapperToolset[DepsT], Generic[DepsT]):
         tool: ToolsetTool[DepsT],
     ) -> Any:
         """Call a tool with middleware hooks."""
+        from .context import HookType
+
         deps = ctx.deps if ctx else None
+
+        # Get scoped contexts for tool hooks
+        before_tool_ctx = self.ctx.for_hook(HookType.BEFORE_TOOL_CALL) if self.ctx else None
+        after_tool_ctx = self.ctx.for_hook(HookType.AFTER_TOOL_CALL) if self.ctx else None
 
         # Apply before_tool_call middleware
         current_args = tool_args
         for mw in self.middleware:
-            current_args = await mw.before_tool_call(name, current_args, deps)
+            current_args = await mw.before_tool_call(name, current_args, deps, before_tool_ctx)
 
         # Execute the tool
         result = await self.wrapped.call_tool(name, current_args, ctx, tool)
 
         # Apply after_tool_call middleware (in reverse order)
         for mw in reversed(self.middleware):
-            result = await mw.after_tool_call(name, current_args, result, deps)
+            result = await mw.after_tool_call(name, current_args, result, deps, after_tool_ctx)
 
         return result
 

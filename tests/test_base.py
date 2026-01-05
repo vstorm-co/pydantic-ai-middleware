@@ -62,7 +62,7 @@ class TestAgentMiddleware:
 
         class DepMiddleware(AgentMiddleware[dict[str, str]]):
             async def before_run(
-                self, prompt: str | Sequence[Any], deps: dict[str, str] | None
+                self, prompt: str | Sequence[Any], deps: dict[str, str] | None, ctx: Any = None
             ) -> str | Sequence[Any]:
                 if deps and "prefix" in deps:
                     return f"{deps['prefix']}: {prompt}"

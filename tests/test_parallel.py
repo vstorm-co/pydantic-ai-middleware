@@ -13,8 +13,11 @@ from pydantic_ai_middleware import (
     AgentMiddleware,
     AggregationFailed,
     AggregationStrategy,
+    HookType,
     InputBlocked,
+    MiddlewareContext,
     ParallelMiddleware,
+    ScopedContext,
 )
 
 
@@ -27,12 +30,16 @@ class SlowMiddleware(AgentMiddleware[None]):
         self.before_run_called = False
         self.after_run_called = False
 
-    async def before_run(self, prompt: str | Sequence[Any], deps: None) -> str | Sequence[Any]:
+    async def before_run(
+        self, prompt: str | Sequence[Any], deps: None, ctx: ScopedContext | None = None
+    ) -> str | Sequence[Any]:
         await asyncio.sleep(self.delay)
         self.before_run_called = True
         return f"{self.name}:{prompt}"
 
-    async def after_run(self, prompt: str | Sequence[Any], output: Any, deps: None) -> Any:
+    async def after_run(
+        self, prompt: str | Sequence[Any], output: Any, deps: None, ctx: ScopedContext | None = None
+    ) -> Any:
         await asyncio.sleep(self.delay)
         self.after_run_called = True
         return f"{self.name}:{output}"
@@ -44,10 +51,14 @@ class FailingMiddleware(AgentMiddleware[None]):
     def __init__(self, error_message: str = "Test error") -> None:
         self.error_message = error_message
 
-    async def before_run(self, prompt: str | Sequence[Any], deps: None) -> str | Sequence[Any]:
+    async def before_run(
+        self, prompt: str | Sequence[Any], deps: None, ctx: ScopedContext | None = None
+    ) -> str | Sequence[Any]:
         raise InputBlocked(self.error_message)
 
-    async def after_run(self, prompt: str | Sequence[Any], output: Any, deps: None) -> Any:
+    async def after_run(
+        self, prompt: str | Sequence[Any], output: Any, deps: None, ctx: ScopedContext | None = None
+    ) -> Any:
         raise InputBlocked(self.error_message)
 
 
@@ -58,11 +69,15 @@ class SlowFailingMiddleware(AgentMiddleware[None]):
         self.delay = delay
         self.reason = reason
 
-    async def before_run(self, prompt: str | Sequence[Any], deps: None) -> str | Sequence[Any]:
+    async def before_run(
+        self, prompt: str | Sequence[Any], deps: None, ctx: ScopedContext | None = None
+    ) -> str | Sequence[Any]:
         await asyncio.sleep(self.delay)
         raise InputBlocked(self.reason)
 
-    async def after_run(self, prompt: str | Sequence[Any], output: Any, deps: None) -> Any:
+    async def after_run(
+        self, prompt: str | Sequence[Any], output: Any, deps: None, ctx: ScopedContext | None = None
+    ) -> Any:
         await asyncio.sleep(self.delay)
         raise InputBlocked(self.reason)
 
@@ -78,16 +93,24 @@ class CountingMiddleware(AgentMiddleware[None]):
         self.before_model_count = 0
         self.on_error_count = 0
 
-    async def before_run(self, prompt: str | Sequence[Any], deps: None) -> str | Sequence[Any]:
+    async def before_run(
+        self, prompt: str | Sequence[Any], deps: None, ctx: ScopedContext | None = None
+    ) -> str | Sequence[Any]:
         self.before_run_count += 1
         return prompt
 
-    async def after_run(self, prompt: str | Sequence[Any], output: Any, deps: None) -> Any:
+    async def after_run(
+        self, prompt: str | Sequence[Any], output: Any, deps: None, ctx: ScopedContext | None = None
+    ) -> Any:
         self.after_run_count += 1
         return output
 
     async def before_tool_call(
-        self, tool_name: str, tool_args: dict[str, Any], deps: None
+        self,
+        tool_name: str,
+        tool_args: dict[str, Any],
+        deps: None,
+        ctx: ScopedContext | None = None,
     ) -> dict[str, Any]:
         self.before_tool_count += 1
         return tool_args
@@ -98,17 +121,20 @@ class CountingMiddleware(AgentMiddleware[None]):
         tool_args: dict[str, Any],
         result: Any,
         deps: None,
+        ctx: ScopedContext | None = None,
     ) -> Any:
         self.after_tool_count += 1
         return result
 
     async def before_model_request(
-        self, messages: list[ModelMessage], deps: None
+        self, messages: list[ModelMessage], deps: None, ctx: ScopedContext | None = None
     ) -> list[ModelMessage]:
         self.before_model_count += 1
         return messages
 
-    async def on_error(self, error: Exception, deps: None) -> Exception | None:
+    async def on_error(
+        self, error: Exception, deps: None, ctx: ScopedContext | None = None
+    ) -> Exception | None:
         self.on_error_count += 1
         return None
 
@@ -120,11 +146,28 @@ class ErrorHandlingMiddleware(AgentMiddleware[None]):
         self.should_handle = should_handle
         self.handled_error: Exception | None = None
 
-    async def on_error(self, error: Exception, deps: None) -> Exception | None:
+    async def on_error(
+        self, error: Exception, deps: None, ctx: ScopedContext | None = None
+    ) -> Exception | None:
         self.handled_error = error
         if self.should_handle:
             return ValueError(f"Converted: {error}")
         return None
+
+
+class ContextWritingMiddleware(AgentMiddleware[None]):
+    """Middleware that writes to context."""
+
+    def __init__(self, key: str, value: str) -> None:
+        self.key = key
+        self.value = value
+
+    async def before_run(
+        self, prompt: str | Sequence[Any], deps: None, ctx: ScopedContext | None = None
+    ) -> str | Sequence[Any]:
+        if ctx:
+            ctx.set(self.key, self.value)
+        return prompt
 
 
 class TestParallelMiddlewareInit:
@@ -563,3 +606,108 @@ class TestParallelMiddlewareEarlyCancellation:
         assert elapsed >= 0.2
         # Returns list of all results
         assert len(result) == 2
+
+
+class TestParallelMiddlewareContextHandling:
+    """Tests for context handling in ParallelMiddleware."""
+
+    async def test_before_run_without_context(self) -> None:
+        """Test before_run works correctly when ctx=None."""
+        mw1 = CountingMiddleware()
+        mw2 = CountingMiddleware()
+
+        parallel = ParallelMiddleware(middleware=[mw1, mw2])
+
+        # Should work without context
+        result = await parallel.before_run("test", None, ctx=None)
+
+        assert result == "test"
+        assert mw1.before_run_count == 1
+        assert mw2.before_run_count == 1
+
+    async def test_after_run_without_context(self) -> None:
+        """Test after_run works correctly when ctx=None."""
+        mw1 = CountingMiddleware()
+        mw2 = CountingMiddleware()
+
+        parallel = ParallelMiddleware(middleware=[mw1, mw2])
+
+        result = await parallel.after_run("prompt", "output", None, ctx=None)
+
+        assert result == "output"
+        assert mw1.after_run_count == 1
+        assert mw2.after_run_count == 1
+
+    async def test_before_tool_call_without_context(self) -> None:
+        """Test before_tool_call works correctly when ctx=None."""
+        mw1 = CountingMiddleware()
+        mw2 = CountingMiddleware()
+
+        parallel = ParallelMiddleware(middleware=[mw1, mw2])
+
+        result = await parallel.before_tool_call("tool", {"arg": "value"}, None, ctx=None)
+
+        assert result == {"arg": "value"}
+        assert mw1.before_tool_count == 1
+        assert mw2.before_tool_count == 1
+
+    async def test_after_tool_call_without_context(self) -> None:
+        """Test after_tool_call works correctly when ctx=None."""
+        mw1 = CountingMiddleware()
+        mw2 = CountingMiddleware()
+
+        parallel = ParallelMiddleware(middleware=[mw1, mw2])
+
+        result = await parallel.after_tool_call("tool", {"arg": "value"}, "result", None, ctx=None)
+
+        assert result == "result"
+        assert mw1.after_tool_count == 1
+        assert mw2.after_tool_count == 1
+
+    async def test_before_model_request_without_context(self) -> None:
+        """Test before_model_request works correctly when ctx=None."""
+        mw1 = CountingMiddleware()
+        mw2 = CountingMiddleware()
+
+        parallel = ParallelMiddleware(middleware=[mw1, mw2])
+
+        messages: list[ModelMessage] = []
+        result = await parallel.before_model_request(messages, None, ctx=None)
+
+        assert result == []
+        assert mw1.before_model_count == 1
+        assert mw2.before_model_count == 1
+
+    async def test_on_error_without_context(self) -> None:
+        """Test on_error works correctly when ctx=None."""
+        mw1 = CountingMiddleware()
+        mw2 = CountingMiddleware()
+
+        parallel = ParallelMiddleware(middleware=[mw1, mw2])
+
+        error = ValueError("test error")
+        result = await parallel.on_error(error, None, ctx=None)
+
+        assert result is None
+        assert mw1.on_error_count == 1
+        assert mw2.on_error_count == 1
+
+    async def test_context_cloning_and_merging(self) -> None:
+        """Test that contexts are cloned for parallel execution and merged back."""
+        mw1 = ContextWritingMiddleware("mw1_key", "mw1_value")
+        mw2 = ContextWritingMiddleware("mw2_key", "mw2_value")
+
+        parallel = ParallelMiddleware(middleware=[mw1, mw2])
+
+        # Create a context and get a scoped view
+        ctx = MiddlewareContext()
+        scoped = ctx.for_hook(HookType.BEFORE_RUN)
+
+        result = await parallel.before_run("test", None, ctx=scoped)
+
+        assert result == "test"
+
+        # Both middleware should have written to the context, merged back
+        data = ctx._hook_data[HookType.BEFORE_RUN]
+        assert data.get("mw1_key") == "mw1_value"
+        assert data.get("mw2_key") == "mw2_value"

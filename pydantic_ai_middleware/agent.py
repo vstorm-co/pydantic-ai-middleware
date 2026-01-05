@@ -25,6 +25,7 @@ from pydantic_ai.tools import (
 from pydantic_ai.toolsets import AbstractToolset
 
 from .base import AgentMiddleware
+from .context import HookType, MiddlewareContext
 from .toolset import MiddlewareToolset
 
 
@@ -39,15 +40,19 @@ class MiddlewareAgent(AbstractAgent[AgentDepsT, OutputDataT]):
         self,
         agent: AbstractAgent[AgentDepsT, OutputDataT],
         middleware: list[AgentMiddleware[AgentDepsT]] | None = None,
+        context: MiddlewareContext | None = None,
     ) -> None:
         """Initialize the middleware agent.
 
         Args:
             agent: The agent to wrap.
             middleware: List of middleware to apply.
+            context: MiddlewareContext instance for sharing data
+                     between hooks. If not provided, context features are disabled.
         """
         self._wrapped = agent
         self._middleware = middleware or []
+        self._context = context
 
     @property
     def wrapped(self) -> AbstractAgent[AgentDepsT, OutputDataT]:
@@ -58,6 +63,11 @@ class MiddlewareAgent(AbstractAgent[AgentDepsT, OutputDataT]):
     def middleware(self) -> list[AgentMiddleware[AgentDepsT]]:
         """The middleware list."""
         return self._middleware
+
+    @property
+    def context(self) -> MiddlewareContext | None:
+        """The middleware context for sharing data between hooks."""
+        return self._context
 
     @property
     def model(self) -> models.Model | models.KnownModelName | str | None:
@@ -132,19 +142,33 @@ class MiddlewareAgent(AbstractAgent[AgentDepsT, OutputDataT]):
         Returns:
             The result of the agent run.
         """
+        if self._context is not None:
+            ctx: MiddlewareContext = self._context
+            # Reset context state from previous runs
+            ctx.reset()
+            # Set run metadata
+            ctx.set_metadata("user_prompt", user_prompt)
+        else:
+            ctx = None
+
         try:
             # Apply before_run middleware
             current_prompt: str | Sequence[Any] | None = user_prompt
+            before_run_ctx = ctx.for_hook(HookType.BEFORE_RUN) if ctx else None
             for mw in self._middleware:
                 if current_prompt is not None:
-                    current_prompt = await mw.before_run(current_prompt, deps)
+                    current_prompt = await mw.before_run(current_prompt, deps, before_run_ctx)
+
+            # Store transformed prompt in metadata
+            if ctx:
+                ctx.set_metadata("transformed_prompt", current_prompt)
 
             # Wrap toolsets with middleware
             middleware_toolsets: list[AbstractToolset[AgentDepsT]] = []
             if toolsets:
                 for ts in toolsets:
                     middleware_toolsets.append(
-                        MiddlewareToolset(wrapped=ts, middleware=self._middleware)
+                        MiddlewareToolset(wrapped=ts, middleware=self._middleware, ctx=ctx)
                     )
 
             # Run the wrapped agent
@@ -167,17 +191,23 @@ class MiddlewareAgent(AbstractAgent[AgentDepsT, OutputDataT]):
 
             # Apply after_run middleware (in reverse order)
             output = result.output
+            after_run_ctx = ctx.for_hook(HookType.AFTER_RUN) if ctx else None
             for mw in reversed(self._middleware):
                 if current_prompt is not None:
-                    output = await mw.after_run(current_prompt, output, deps)
+                    output = await mw.after_run(current_prompt, output, deps, after_run_ctx)
+
+            # Store final output in metadata
+            if ctx:
+                ctx.set_metadata("final_output", output)
 
             # Return result with possibly modified output
             return _create_result_with_output(result, output)
 
         except Exception as e:
             # Apply on_error middleware
+            on_error_ctx = ctx.for_hook(HookType.ON_ERROR) if ctx else None
             for mw in self._middleware:
-                handled = await mw.on_error(e, deps)
+                handled = await mw.on_error(e, deps, on_error_ctx)
                 if handled is not None:
                     raise handled from e
             raise
@@ -201,18 +231,33 @@ class MiddlewareAgent(AbstractAgent[AgentDepsT, OutputDataT]):
         builtin_tools: Sequence[AbstractBuiltinTool | BuiltinToolFunc[AgentDepsT]] | None = None,
     ) -> AsyncIterator[AgentRun[AgentDepsT, Any]]:
         """Iterate over agent execution with middleware applied."""
+        # Use provided context or None
+        if self._context is not None:
+            ctx: MiddlewareContext = self._context
+            # Reset context state from previous runs
+            ctx.reset()
+            # Set run metadata
+            ctx.set_metadata("user_prompt", user_prompt)
+        else:
+            ctx = None
+
         # Apply before_run middleware
         current_prompt: str | Sequence[Any] | None = user_prompt
+        before_run_ctx = ctx.for_hook(HookType.BEFORE_RUN) if ctx else None
         for mw in self._middleware:
             if current_prompt is not None:
-                current_prompt = await mw.before_run(current_prompt, deps)
+                current_prompt = await mw.before_run(current_prompt, deps, before_run_ctx)
+
+        # Store transformed prompt in metadata
+        if ctx:
+            ctx.set_metadata("transformed_prompt", current_prompt)
 
         # Wrap toolsets with middleware
         middleware_toolsets: list[AbstractToolset[AgentDepsT]] = []
         if toolsets:
             for ts in toolsets:
                 middleware_toolsets.append(
-                    MiddlewareToolset(wrapped=ts, middleware=self._middleware)
+                    MiddlewareToolset(wrapped=ts, middleware=self._middleware, ctx=ctx)
                 )
 
         async with self._wrapped.iter(

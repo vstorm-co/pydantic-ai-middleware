@@ -26,7 +26,9 @@ class SlowSafetyCheck(AgentMiddleware[None]):
     def __init__(self, delay: float = 0.5) -> None:
         self.delay = delay
 
-    async def before_run(self, prompt: str | Sequence[Any], deps: None) -> str | Sequence[Any]:
+    async def before_run(
+        self, prompt: str | Sequence[Any], deps: None, ctx=None
+    ) -> str | Sequence[Any]:
         await asyncio.sleep(self.delay)
         if isinstance(prompt, str) and "dangerous" in prompt.lower():
             raise InputBlocked("Dangerous content detected")

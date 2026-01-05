@@ -24,7 +24,9 @@ from pydantic_ai_middleware import (
 class ProfanityFilter(AgentMiddleware[None]):
     """Checks for blocked words (simulates 0.3s API call)."""
 
-    async def before_run(self, prompt: str | Sequence[Any], deps: None) -> str | Sequence[Any]:
+    async def before_run(
+        self, prompt: str | Sequence[Any], deps: None, ctx=None
+    ) -> str | Sequence[Any]:
         await asyncio.sleep(0.3)
         if isinstance(prompt, str):
             blocked = {"badword", "offensive"}
@@ -36,7 +38,9 @@ class ProfanityFilter(AgentMiddleware[None]):
 class PIIDetector(AgentMiddleware[None]):
     """Checks for email/phone (simulates 1.0s API call)."""
 
-    async def before_run(self, prompt: str | Sequence[Any], deps: None) -> str | Sequence[Any]:
+    async def before_run(
+        self, prompt: str | Sequence[Any], deps: None, ctx=None
+    ) -> str | Sequence[Any]:
         await asyncio.sleep(5.0)
         if isinstance(prompt, str):
             if re.search(r"\b[\w.-]+@[\w.-]+\.\w+\b", prompt):
@@ -49,7 +53,9 @@ class PIIDetector(AgentMiddleware[None]):
 class InjectionGuard(AgentMiddleware[None]):
     """Checks for prompt injection (simulates 0.5s API call)."""
 
-    async def before_run(self, prompt: str | Sequence[Any], deps: None) -> str | Sequence[Any]:
+    async def before_run(
+        self, prompt: str | Sequence[Any], deps: None, ctx=None
+    ) -> str | Sequence[Any]:
         await asyncio.sleep(0.5)
         if isinstance(prompt, str):
             patterns = ["ignore previous", "disregard", "you are now"]

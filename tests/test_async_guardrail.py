@@ -14,6 +14,7 @@ from pydantic_ai_middleware import (
     GuardrailTimeout,
     GuardrailTiming,
     InputBlocked,
+    ScopedContext,
 )
 
 
@@ -29,14 +30,18 @@ class SlowGuardrail(AgentMiddleware[None]):
         self.after_tool_called = False
         self.before_model_called = False
 
-    async def before_run(self, prompt: str | Sequence[Any], deps: None) -> str | Sequence[Any]:
+    async def before_run(
+        self, prompt: str | Sequence[Any], deps: None, ctx: ScopedContext | None = None
+    ) -> str | Sequence[Any]:
         await asyncio.sleep(self.delay)
         self.before_run_called = True
         if self.should_fail:
             raise InputBlocked("Guardrail blocked")
         return prompt
 
-    async def after_run(self, prompt: str | Sequence[Any], output: Any, deps: None) -> Any:
+    async def after_run(
+        self, prompt: str | Sequence[Any], output: Any, deps: None, ctx: ScopedContext | None = None
+    ) -> Any:
         await asyncio.sleep(self.delay)
         self.after_run_called = True
         if self.should_fail:
@@ -44,7 +49,11 @@ class SlowGuardrail(AgentMiddleware[None]):
         return output
 
     async def before_tool_call(
-        self, tool_name: str, tool_args: dict[str, Any], deps: None
+        self,
+        tool_name: str,
+        tool_args: dict[str, Any],
+        deps: None,
+        ctx: ScopedContext | None = None,
     ) -> dict[str, Any]:
         self.before_tool_called = True
         return tool_args
@@ -55,15 +64,20 @@ class SlowGuardrail(AgentMiddleware[None]):
         tool_args: dict[str, Any],
         result: Any,
         deps: None,
+        ctx: ScopedContext | None = None,
     ) -> Any:
         self.after_tool_called = True
         return result
 
-    async def before_model_request(self, messages: list, deps: None) -> list:
+    async def before_model_request(
+        self, messages: list, deps: None, ctx: ScopedContext | None = None
+    ) -> list:
         self.before_model_called = True
         return messages
 
-    async def on_error(self, error: Exception, deps: None) -> Exception | None:
+    async def on_error(
+        self, error: Exception, deps: None, ctx: ScopedContext | None = None
+    ) -> Exception | None:
         return ValueError(f"Converted: {error}")
 
 
@@ -74,11 +88,15 @@ class PassThroughGuardrail(AgentMiddleware[None]):
         self.before_run_count = 0
         self.after_run_count = 0
 
-    async def before_run(self, prompt: str | Sequence[Any], deps: None) -> str | Sequence[Any]:
+    async def before_run(
+        self, prompt: str | Sequence[Any], deps: None, ctx: ScopedContext | None = None
+    ) -> str | Sequence[Any]:
         self.before_run_count += 1
         return prompt
 
-    async def after_run(self, prompt: str | Sequence[Any], output: Any, deps: None) -> Any:
+    async def after_run(
+        self, prompt: str | Sequence[Any], output: Any, deps: None, ctx: ScopedContext | None = None
+    ) -> Any:
         self.after_run_count += 1
         return output
 

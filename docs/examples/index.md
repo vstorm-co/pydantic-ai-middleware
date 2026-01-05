@@ -15,11 +15,11 @@ from pydantic_ai import Agent
 from pydantic_ai_middleware import MiddlewareAgent, AgentMiddleware
 
 class SimpleLogger(AgentMiddleware[None]):
-    async def before_run(self, prompt, deps):
+    async def before_run(self, prompt, deps, ctx):
         print(f">> {prompt}")
         return prompt
 
-    async def after_run(self, prompt, output, deps):
+    async def after_run(self, prompt, output, deps, ctx):
         print(f"<< {output}")
         return output
 
