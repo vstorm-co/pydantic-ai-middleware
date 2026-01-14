@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Conditional Middleware** - `ConditionalMiddleware` for branching execution based on runtime conditions
+  - Route to different middleware based on predicate functions
+  - Supports single middleware or middleware pipelines for each branch
+  - Predicate receives `ScopedContext` for context-aware decisions
+  - `when(condition, then, otherwise)` helper for fluent syntax
 - **Context Sharing System** - Share data between middleware hooks with access control
   - `MiddlewareContext` class for managing shared state across hooks
   - `ScopedContext` class for enforcing access control based on hook execution order
