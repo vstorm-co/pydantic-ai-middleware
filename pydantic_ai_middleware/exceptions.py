@@ -12,6 +12,10 @@ class MiddlewareError(Exception):
     """Base exception for middleware errors."""
 
 
+class MiddlewareConfigError(MiddlewareError):
+    """Raised when middleware configuration is invalid."""
+
+
 class InputBlocked(MiddlewareError):
     """Raised when input is blocked by middleware."""
 

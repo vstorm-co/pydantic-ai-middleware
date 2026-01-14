@@ -9,6 +9,7 @@ from pydantic_ai_middleware import (
     AggregationStrategy,
     GuardrailTimeout,
     InputBlocked,
+    MiddlewareConfigError,
     MiddlewareError,
     OutputBlocked,
     ParallelExecutionFailed,
@@ -165,6 +166,7 @@ class TestExceptionHierarchy:
         assert issubclass(InputBlocked, MiddlewareError)
         assert issubclass(ToolBlocked, MiddlewareError)
         assert issubclass(OutputBlocked, MiddlewareError)
+        assert issubclass(MiddlewareConfigError, MiddlewareError)
         assert issubclass(ParallelExecutionFailed, MiddlewareError)
         assert issubclass(GuardrailTimeout, MiddlewareError)
         assert issubclass(AggregationFailed, MiddlewareError)
@@ -179,6 +181,9 @@ class TestExceptionHierarchy:
 
         with pytest.raises(MiddlewareError):
             raise OutputBlocked()
+
+        with pytest.raises(MiddlewareError):
+            raise MiddlewareConfigError("bad")
 
         with pytest.raises(MiddlewareError):
             raise ParallelExecutionFailed(errors=[])

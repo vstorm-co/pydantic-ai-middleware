@@ -22,6 +22,7 @@ Simple middleware library for [Pydantic-AI](https://github.com/pydantic/pydantic
 - **Cross-Middleware Context Sharing** - Share data between hooks with access control
 - **Decorator Support** - Simple decorators for quick middleware creation
 - **Parallel Execution** - Run multiple middleware concurrently with early cancellation
+- **Composition Helpers** - Chain, branch, and load middleware from config
 - **Async Guardrails** - Run guardrails concurrently with LLM calls
 - **Type Safe** - Full typing support with generics for dependencies
 
@@ -100,7 +101,7 @@ from pydantic_ai_middleware import ParallelMiddleware, AggregationStrategy
 parallel_validators = ParallelMiddleware(
     middleware=[
         ProfanityFilter(),      # 0.3s
-        PIIDetector(),          # 0.5s  
+        PIIDetector(),          # 0.5s
         InjectionGuard(),       # 0.3s
     ],
     strategy=AggregationStrategy.ALL_MUST_PASS,
@@ -123,6 +124,33 @@ agent = MiddlewareAgent(
 | `FIRST_SUCCESS` | Returns first success; cancels remaining tasks |
 | `RACE` | Returns first completion (success or failure) |
 | `COLLECT_ALL` | Waits for all results |
+
+## Composition Helpers
+
+Combine middleware with chains, conditionals, and config loaders:
+
+```python
+from pydantic_ai_middleware import chain, when, load_middleware_config_text
+from pydantic_ai_middleware.context import HookType
+
+# Sequential grouping
+audit = chain(LoggingMiddleware(), MetricsMiddleware())
+
+# Conditional branching
+guarded = when(
+    lambda ctx: ctx.hook == HookType.BEFORE_RUN,
+    then=SecurityMiddleware(),
+)
+
+# JSON/YAML config loading
+config_text = """
+[
+  {"type": "logging"},
+  {"parallel": {"middleware": [{"type": "pii"}, {"type": "profanity"}]}}
+]
+"""
+middleware = load_middleware_config_text(config_text, registry=registry, format="json")
+```
 
 ## Async Guardrails
 
@@ -197,7 +225,7 @@ The context system enforces strict access control based on hook execution order:
 - **Read Access**: Hooks can only read from earlier or same-phase hooks
 
 ```
-Hook Order: BEFORE_RUN(1) → BEFORE_MODEL_REQUEST(2) → BEFORE_TOOL_CALL(3) 
+Hook Order: BEFORE_RUN(1) → BEFORE_MODEL_REQUEST(2) → BEFORE_TOOL_CALL(3)
             → AFTER_TOOL_CALL(4) → AFTER_RUN(5) → ON_ERROR(6)
 ```
 

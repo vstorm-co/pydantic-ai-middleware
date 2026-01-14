@@ -10,6 +10,7 @@ from __future__ import annotations
 from .agent import MiddlewareAgent
 from .async_guardrail import AsyncGuardrailMiddleware
 from .base import AgentMiddleware
+from .conditional import ConditionalMiddleware
 from .context import (
     ContextAccessError,
     HookType,
@@ -28,6 +29,7 @@ from .exceptions import (
     AggregationFailed,
     GuardrailTimeout,
     InputBlocked,
+    MiddlewareConfigError,
     MiddlewareError,
     OutputBlocked,
     ParallelExecutionFailed,
@@ -52,7 +54,8 @@ __all__ = [
     # Parallel execution
     "ParallelMiddleware",
     "AsyncGuardrailMiddleware",
-    # Strategies
+    # Composition helpers
+    "ConditionalMiddleware",
     "AggregationStrategy",
     "GuardrailTiming",
     # Decorators
@@ -64,6 +67,7 @@ __all__ = [
     "on_error",
     # Exceptions
     "MiddlewareError",
+    "MiddlewareConfigError",
     "InputBlocked",
     "ToolBlocked",
     "OutputBlocked",
