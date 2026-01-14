@@ -81,6 +81,7 @@ nav:
     - concepts/hooks.md
     - concepts/decorators.md
     - concepts/parallel-execution.md
+    - concepts/conditional-middleware.md
   - Examples:
     - examples/index.md
     - examples/logging.md
