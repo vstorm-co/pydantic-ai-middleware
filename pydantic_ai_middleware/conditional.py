@@ -3,22 +3,15 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic
 
 from pydantic_ai.messages import ModelMessage
 
 from .base import AgentMiddleware, DepsT
 from .context import ScopedContext
-from .validation import validate_middleware_item, validate_middleware_sequence
 
-CtxT = TypeVar("CtxT", bound=ScopedContext | None)
-"""Type variable for condition predicate context."""
-
-Predicate = Callable[[CtxT], bool]
+Predicate = Callable[[ScopedContext | None], bool]
 """Predicate function that takes a scoped context and returns bool."""
-
-PredicateFactory = Callable[..., Predicate[ScopedContext | None]]
-"""Factory for predicate functions."""
 
 
 class ConditionalMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
@@ -68,8 +61,26 @@ class ConditionalMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
     ) -> list[AgentMiddleware[DepsT]]:
         """Normalize middleware to a list."""
         if isinstance(mw, Sequence) and not isinstance(mw, AgentMiddleware):
-            return validate_middleware_sequence(mw)
-        return [validate_middleware_item(mw)]
+            return self._validate_middleware_sequence(mw)
+        return [self._validate_middleware_item(mw)]
+
+    def _validate_middleware_sequence(self, items: Sequence[Any]) -> list[AgentMiddleware[Any]]:
+        """Validate and flatten a sequence of middleware."""
+        result: list[AgentMiddleware[Any]] = []
+        for item in items:
+            if not isinstance(item, AgentMiddleware):
+                raise TypeError(
+                    f"Expected AgentMiddleware instances in sequence, got {type(item).__name__}"
+                )
+            result.append(item)
+        return result
+
+    def _validate_middleware_item(self, item: Any, context: str = "") -> AgentMiddleware[Any]:
+        """Validate that an item is a middleware instance."""
+        if not isinstance(item, AgentMiddleware):
+            msg = f"Expected AgentMiddleware{context}, got {type(item).__name__}"
+            raise TypeError(msg)
+        return item
 
     def __repr__(self) -> str:
         """Return string representation."""
