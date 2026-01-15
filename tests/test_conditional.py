@@ -171,6 +171,14 @@ class TestConditionalMiddlewareInit:
                 when_true="not a middleware",  # type: ignore[arg-type]
             )
 
+    def test_init_invalid_when_true_non_sequence_type(self) -> None:
+        """Test init with invalid non-sequence when_true type raises TypeError."""
+        with pytest.raises(TypeError, match="Expected AgentMiddleware"):
+            ConditionalMiddleware(
+                condition=lambda ctx: True,
+                when_true=123,  # type: ignore[arg-type]
+            )
+
     def test_init_invalid_when_false_type(self) -> None:
         """Test init with invalid when_false type raises TypeError."""
         mw = TrackingMiddleware()
@@ -408,6 +416,23 @@ class TestConditionalMiddlewareBeforeModelRequest:
         assert result == messages
         assert len(tracker.before_model_request_calls) == 1
 
+    async def test_before_model_request_executes_when_false(self) -> None:
+        """Test before_model_request executes when_false middleware."""
+        tracker_true = TrackingMiddleware("true")
+        tracker_false = TrackingMiddleware("false")
+        cond = ConditionalMiddleware(
+            condition=lambda ctx: False,
+            when_true=tracker_true,
+            when_false=tracker_false,
+        )
+
+        messages: list[ModelMessage] = [ModelRequest(parts=[UserPromptPart(content="Hello")])]
+        result = await cond.before_model_request(messages, None)
+
+        assert result == messages
+        assert tracker_true.before_model_request_calls == []
+        assert tracker_false.before_model_request_calls == [messages]
+
     async def test_before_model_request_passthrough_when_false_none(self) -> None:
         """Test before_model_request passes through when no match."""
         tracker = TrackingMiddleware()
@@ -439,6 +464,23 @@ class TestConditionalMiddlewareBeforeToolCall:
         assert result == {"arg": "value"}
         assert tracker.before_tool_calls == [("my_tool", {"arg": "value"})]
 
+    async def test_before_tool_call_executes_when_false(self) -> None:
+        """Test before_tool_call executes when_false middleware."""
+        tracker_true = TrackingMiddleware("true")
+        tracker_false = TrackingMiddleware("false")
+        cond = ConditionalMiddleware(
+            condition=lambda ctx: False,
+            when_true=tracker_true,
+            when_false=tracker_false,
+        )
+
+        tool_args = {"arg": "value"}
+        result = await cond.before_tool_call("my_tool", tool_args, None)
+
+        assert result == tool_args
+        assert tracker_true.before_tool_calls == []
+        assert tracker_false.before_tool_calls == [("my_tool", tool_args)]
+
     async def test_before_tool_call_passthrough_when_false_none(self) -> None:
         """Test before_tool_call passes through when no match."""
         tracker = TrackingMiddleware()
@@ -468,6 +510,23 @@ class TestConditionalMiddlewareAfterToolCall:
 
         assert result == "result"
         assert tracker.after_tool_calls == [("my_tool", {"arg": "value"}, "result")]
+
+    async def test_after_tool_call_executes_when_false(self) -> None:
+        """Test after_tool_call executes when_false middleware."""
+        tracker_true = TrackingMiddleware("true")
+        tracker_false = TrackingMiddleware("false")
+        cond = ConditionalMiddleware(
+            condition=lambda ctx: False,
+            when_true=tracker_true,
+            when_false=tracker_false,
+        )
+
+        tool_args = {"arg": "value"}
+        result = await cond.after_tool_call("my_tool", tool_args, "result", None)
+
+        assert result == "result"
+        assert tracker_true.after_tool_calls == []
+        assert tracker_false.after_tool_calls == [("my_tool", tool_args, "result")]
 
     async def test_after_tool_call_passthrough_when_false_none(self) -> None:
         """Test after_tool_call passes through when no match."""
@@ -530,6 +589,23 @@ class TestConditionalMiddlewareOnError:
 
         assert result is None
         assert tracker.on_error_calls == [error]
+
+    async def test_on_error_executes_when_false(self) -> None:
+        """Test on_error executes when_false middleware."""
+        tracker_true = TrackingMiddleware("true")
+        tracker_false = TrackingMiddleware("false")
+        cond = ConditionalMiddleware(
+            condition=lambda ctx: False,
+            when_true=tracker_true,
+            when_false=tracker_false,
+        )
+
+        error = ValueError("test error")
+        result = await cond.on_error(error, None)
+
+        assert result is None
+        assert tracker_true.on_error_calls == []
+        assert tracker_false.on_error_calls == [error]
 
     async def test_on_error_passthrough_when_false_none(self) -> None:
         """Test on_error passes through when no match."""
@@ -628,6 +704,57 @@ class TestConditionalMiddlewareConditionContext:
         # Should NOT execute for AFTER_RUN
         await cond.after_run("test", "output", None, parent_ctx.for_hook(HookType.AFTER_RUN))
         assert len(tracker.after_run_calls) == 0
+
+    async def test_condition_evaluated_per_hook_call(self) -> None:
+        """Test condition runs for each hook invocation."""
+        seen_hooks: list[HookType] = []
+
+        def capture_hook(ctx: ScopedContext | None) -> bool:
+            if ctx is not None:
+                seen_hooks.append(ctx.current_hook)
+            return False
+
+        cond = ConditionalMiddleware(
+            condition=capture_hook,
+            when_true=TrackingMiddleware(),
+        )
+
+        parent_ctx = MiddlewareContext()
+        messages: list[ModelMessage] = [ModelRequest(parts=[UserPromptPart(content="Hello")])]
+
+        await cond.before_model_request(
+            messages, None, parent_ctx.for_hook(HookType.BEFORE_MODEL_REQUEST)
+        )
+        await cond.before_tool_call(
+            "tool", {}, None, parent_ctx.for_hook(HookType.BEFORE_TOOL_CALL)
+        )
+        await cond.after_tool_call(
+            "tool", {}, "result", None, parent_ctx.for_hook(HookType.AFTER_TOOL_CALL)
+        )
+
+        assert seen_hooks == [
+            HookType.BEFORE_MODEL_REQUEST,
+            HookType.BEFORE_TOOL_CALL,
+            HookType.AFTER_TOOL_CALL,
+        ]
+
+
+class TestConditionalMiddlewareConditionErrors:
+    """Tests for condition error handling."""
+
+    async def test_condition_exception_propagates(self) -> None:
+        """Test condition exceptions propagate to caller."""
+
+        def raise_error(ctx: ScopedContext | None) -> bool:
+            raise RuntimeError("condition failed")
+
+        cond = ConditionalMiddleware(
+            condition=raise_error,
+            when_true=TrackingMiddleware(),
+        )
+
+        with pytest.raises(RuntimeError, match="condition failed"):
+            await cond.before_run("test", None)
 
 
 class TestConditionalMiddlewareIntegration:
