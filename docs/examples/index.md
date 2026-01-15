@@ -8,6 +8,10 @@ Real-world examples of using pydantic-ai-middleware.
 - [Security](security.md) - Implement security checks
 - [Rate Limiting](rate-limiting.md) - Control request frequency
 
+## Script Examples
+
+- `examples/conditional_middleware.py` - Conditional middleware driven by context config
+
 ## Basic Example
 
 ```python
