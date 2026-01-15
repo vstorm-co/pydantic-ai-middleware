@@ -22,7 +22,6 @@ Simple middleware library for [Pydantic-AI](https://github.com/pydantic/pydantic
 - **Cross-Middleware Context Sharing** - Share data between hooks with access control
 - **Decorator Support** - Simple decorators for quick middleware creation
 - **Parallel Execution** - Run multiple middleware concurrently with early cancellation
-- **Composition Helpers** - Chain, branch, and load middleware from config
 - **Async Guardrails** - Run guardrails concurrently with LLM calls
 - **Type Safe** - Full typing support with generics for dependencies
 
