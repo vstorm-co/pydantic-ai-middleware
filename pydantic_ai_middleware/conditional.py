@@ -36,7 +36,7 @@ class ConditionalMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
 
     def __init__(
         self,
-        condition: Predicate[ScopedContext | None],
+        condition: Predicate,
         when_true: AgentMiddleware[DepsT] | Sequence[AgentMiddleware[DepsT]],
         when_false: AgentMiddleware[DepsT] | Sequence[AgentMiddleware[DepsT]] | None = None,
     ) -> None:
