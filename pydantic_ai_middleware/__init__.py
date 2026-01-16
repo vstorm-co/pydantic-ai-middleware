@@ -10,6 +10,7 @@ from __future__ import annotations
 from .agent import MiddlewareAgent
 from .async_guardrail import AsyncGuardrailMiddleware
 from .base import AgentMiddleware
+from .chain import MiddlewareChain
 from .conditional import ConditionalMiddleware
 from .context import (
     ContextAccessError,
@@ -45,7 +46,13 @@ __all__ = [
     # Core classes
     "AgentMiddleware",
     "MiddlewareAgent",
+    "MiddlewareChain",
     "MiddlewareToolset",
+    # Config loading/saving
+    "load_middleware_config_path",
+    "load_middleware_config_text",
+    "dump_middleware_config",
+    "save_middleware_config_path",
     # Context
     "MiddlewareContext",
     "ScopedContext",
@@ -74,4 +81,5 @@ __all__ = [
     "ParallelExecutionFailed",
     "GuardrailTimeout",
     "AggregationFailed",
+    "MiddlewareConfigError",
 ]
