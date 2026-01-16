@@ -78,6 +78,7 @@ nav:
   - Concepts:
     - concepts/index.md
     - concepts/middleware.md
+    - concepts/middleware-chains.md
     - concepts/hooks.md
     - concepts/decorators.md
     - concepts/parallel-execution.md
@@ -90,6 +91,7 @@ nav:
   - API Reference:
     - api/index.md
     - api/middleware.md
+    - api/chain.md
     - api/agent.md
     - api/toolset.md
     - api/decorators.md

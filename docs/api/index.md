@@ -6,6 +6,7 @@ Complete API documentation for pydantic-ai-middleware.
 
 - [`AgentMiddleware`](middleware.md) - Base middleware class
 - [`MiddlewareAgent`](agent.md) - Agent wrapper with middleware
+- [`MiddlewareChain`](chain.md) - Composable middleware sequences
 - [`MiddlewareToolset`](toolset.md) - Toolset wrapper for tool interception
 
 ## Decorators
@@ -31,6 +32,7 @@ from pydantic_ai_middleware import (
     # Core
     AgentMiddleware,
     MiddlewareAgent,
+    MiddlewareChain,
     MiddlewareToolset,
     # Decorators
     before_run,
