@@ -833,3 +833,64 @@ class TestMiddlewareChainIntegration:
         # Verify order
         before_runs = [call for call in TrackingMiddleware.call_order if "before_run" in call]
         assert before_runs == ["mw1:before_run", "mw2:before_run"]
+
+
+class TestMiddlewareChainErrors:
+    """Test error handling in MiddlewareChain."""
+
+    def test_flatten_invalid_item_type(self):
+        """Flattening with invalid item type raises error."""
+        with pytest.raises(
+            TypeError, match="MiddlewareChain items must be AgentMiddleware or MiddlewareChain"
+        ):
+            MiddlewareChain(["not a middleware"])  # type: ignore
+
+    def test_add_invalid_type(self):
+        """Adding invalid type raises error."""
+        chain = MiddlewareChain()
+        with pytest.raises(
+            TypeError, match="MiddlewareChain.add expects AgentMiddleware or MiddlewareChain"
+        ):
+            chain.add("not a middleware")  # type: ignore
+
+    def test_insert_invalid_type(self):
+        """Inserting invalid type raises error."""
+        chain = MiddlewareChain()
+        with pytest.raises(
+            TypeError, match="MiddlewareChain.insert expects AgentMiddleware or MiddlewareChain"
+        ):
+            chain.insert(0, "not a middleware")  # type: ignore
+
+    def test_replace_with_chain(self):
+        """Replace middleware with a chain."""
+        mw1 = TrackingMiddleware("mw1")
+        mw2 = TrackingMiddleware("mw2")
+        mw3 = TrackingMiddleware("mw3")
+
+        chain = MiddlewareChain([mw1, mw2])
+        replacement_chain = MiddlewareChain([mw3])
+
+        chain.replace(mw1, replacement_chain)
+
+        assert len(chain) == 2
+        assert chain[0] == mw3
+        assert chain[1] == mw2
+
+    def test_replace_invalid_type(self):
+        """Replacing with invalid type raises error."""
+        mw1 = TrackingMiddleware("mw1")
+        chain = MiddlewareChain([mw1])
+
+        with pytest.raises(
+            TypeError, match="MiddlewareChain.replace expects AgentMiddleware or MiddlewareChain"
+        ):
+            chain.replace(mw1, "not a middleware")  # type: ignore
+
+    def test_add_operator_invalid_type(self):
+        """Adding with + operator with invalid type raises error."""
+        chain = MiddlewareChain()
+
+        with pytest.raises(
+            TypeError, match="MiddlewareChain \\+ expects AgentMiddleware or MiddlewareChain"
+        ):
+            chain + "not a middleware"  # type: ignore

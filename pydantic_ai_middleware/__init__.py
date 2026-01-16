@@ -12,6 +12,16 @@ from .async_guardrail import AsyncGuardrailMiddleware
 from .base import AgentMiddleware
 from .chain import MiddlewareChain
 from .conditional import ConditionalMiddleware
+from .config_loaders import (
+    MiddlewareFactory,
+    PredicateFactory,
+    dump_middleware_config,
+    load_middleware_config_path,
+    load_middleware_config_text,
+    register_middleware,
+    register_predicate,
+    save_middleware_config_path,
+)
 from .context import (
     ContextAccessError,
     HookType,
@@ -53,6 +63,10 @@ __all__ = [
     "load_middleware_config_text",
     "dump_middleware_config",
     "save_middleware_config_path",
+    "register_middleware",
+    "register_predicate",
+    "MiddlewareFactory",
+    "PredicateFactory",
     # Context
     "MiddlewareContext",
     "ScopedContext",
@@ -81,5 +95,4 @@ __all__ = [
     "ParallelExecutionFailed",
     "GuardrailTimeout",
     "AggregationFailed",
-    "MiddlewareConfigError",
 ]
