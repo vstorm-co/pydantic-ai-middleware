@@ -63,6 +63,7 @@ async def log_input(prompt, deps, ctx):
 
 - [Middleware](middleware.md) - Deep dive into middleware
 - [Middleware Chains](middleware-chains.md) - Compose and reuse ordered pipelines
+- [Config Loading](config-loading.md) - Load and save middleware pipelines
 - [Hooks](hooks.md) - All available lifecycle hooks
 - [Decorators](decorators.md) - Decorator-based middleware
 - [Parallel Execution](parallel-execution.md) - Run middleware in parallel

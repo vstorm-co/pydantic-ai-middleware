@@ -78,6 +78,7 @@ nav:
   - Concepts:
     - concepts/index.md
     - concepts/middleware.md
+    - concepts/config-loading.md
     - concepts/middleware-chains.md
     - concepts/hooks.md
     - concepts/decorators.md

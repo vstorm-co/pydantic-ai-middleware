@@ -130,16 +130,21 @@ agent = MiddlewareAgent(
 Combine middleware with chains, conditionals, and config loaders:
 
 ```python
-from pydantic_ai_middleware import chain, when, load_middleware_config_text
+from pydantic_ai_middleware import (
+    ConditionalMiddleware,
+    MiddlewareChain,
+    load_middleware_config_text,
+    save_middleware_config_path,
+)
 from pydantic_ai_middleware.context import HookType
 
 # Sequential grouping
-audit = chain(LoggingMiddleware(), MetricsMiddleware())
+audit = MiddlewareChain([LoggingMiddleware(), MetricsMiddleware()])
 
 # Conditional branching
-guarded = when(
-    lambda ctx: ctx.hook == HookType.BEFORE_RUN,
-    then=SecurityMiddleware(),
+guarded = ConditionalMiddleware(
+    condition=lambda ctx: ctx is not None and ctx.current_hook == HookType.BEFORE_RUN,
+    when_true=[SecurityMiddleware()],
 )
 
 # JSON/YAML config loading
@@ -149,7 +154,12 @@ config_text = """
   {"parallel": {"middleware": [{"type": "pii"}, {"type": "profanity"}]}}
 ]
 """
-middleware = load_middleware_config_text(config_text, registry=registry, format="json")
+middleware = load_middleware_config_text(config_text, registry=registry)
+config_data = [
+    {"type": "logging"},
+    {"parallel": {"middleware": [{"type": "pii"}, {"type": "profanity"}]}},
+]
+save_middleware_config_path(config_data, "pipeline.json")
 ```
 
 ## Async Guardrails
