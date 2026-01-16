@@ -171,6 +171,14 @@ class TestConditionalMiddlewareInit:
                 when_true="not a middleware",  # type: ignore[arg-type]
             )
 
+    def test_init_invalid_when_true_non_sequence(self) -> None:
+        """Test init with invalid non-sequence when_true raises TypeError."""
+        with pytest.raises(TypeError, match="Expected AgentMiddleware"):
+            ConditionalMiddleware(
+                condition=lambda ctx: True,
+                when_true=123,  # type: ignore[arg-type]
+            )
+
     def test_init_invalid_when_false_type(self) -> None:
         """Test init with invalid when_false type raises TypeError."""
         mw = TrackingMiddleware()
@@ -189,6 +197,18 @@ class TestConditionalMiddlewareInit:
                 condition=lambda ctx: True,
                 when_true=[mw, "not a middleware"],  # type: ignore[list-item]
             )
+
+    def test_init_with_subclassed_sequence_type(self) -> None:
+        """Test when_true as custom Sequence is normalized."""
+        mw1 = TrackingMiddleware("mw1")
+        mw2 = TrackingMiddleware("mw2")
+
+        class MiddlewareSequence(list):
+            pass
+
+        seq = MiddlewareSequence([mw1, mw2])
+        cond = ConditionalMiddleware(condition=lambda ctx: True, when_true=seq)
+        assert cond.when_true == [mw1, mw2]
 
 
 class TestConditionalMiddlewareRepr:
