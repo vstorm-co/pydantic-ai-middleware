@@ -442,6 +442,52 @@ class TestConditionalMiddlewareBeforeModelRequest:
         assert result == messages
         assert len(tracker.before_model_request_calls) == 0
 
+    async def test_before_model_request_executes_when_false(self) -> None:
+        """Test before_model_request executes when_false middleware."""
+        tracker_true = TrackingMiddleware("true")
+        tracker_false = TrackingMiddleware("false")
+        cond = ConditionalMiddleware(
+            condition=lambda ctx: False,
+            when_true=tracker_true,
+            when_false=tracker_false,
+        )
+
+        messages: list[ModelMessage] = [ModelRequest(parts=[UserPromptPart(content="Hello")])]
+        result = await cond.before_model_request(messages, None)
+
+        assert result == messages
+        assert len(tracker_true.before_model_request_calls) == 0
+        assert len(tracker_false.before_model_request_calls) == 1
+
+    async def test_before_model_request_executes_sequence_in_order(self) -> None:
+        """Test before_model_request executes middleware sequence in order."""
+        calls: list[str] = []
+
+        class OrderTracker(AgentMiddleware[None]):
+            def __init__(self, name: str) -> None:
+                self.name = name
+
+            async def before_model_request(
+                self,
+                messages: list[ModelMessage],
+                deps: None,
+                ctx: ScopedContext | None = None,
+            ) -> list[ModelMessage]:
+                calls.append(self.name)
+                return messages
+
+        mw1 = OrderTracker("first")
+        mw2 = OrderTracker("second")
+        cond = ConditionalMiddleware(
+            condition=lambda ctx: True,
+            when_true=[mw1, mw2],
+        )
+
+        messages: list[ModelMessage] = [ModelRequest(parts=[UserPromptPart(content="Hello")])]
+        await cond.before_model_request(messages, None)
+
+        assert calls == ["first", "second"]
+
 
 class TestConditionalMiddlewareBeforeToolCall:
     """Tests for ConditionalMiddleware.before_tool_call hook."""
@@ -471,6 +517,51 @@ class TestConditionalMiddlewareBeforeToolCall:
 
         assert result == {"arg": "value"}
         assert tracker.before_tool_calls == []
+
+    async def test_before_tool_call_executes_when_false(self) -> None:
+        """Test before_tool_call executes when_false middleware."""
+        tracker_true = TrackingMiddleware("true")
+        tracker_false = TrackingMiddleware("false")
+        cond = ConditionalMiddleware(
+            condition=lambda ctx: False,
+            when_true=tracker_true,
+            when_false=tracker_false,
+        )
+
+        result = await cond.before_tool_call("my_tool", {"arg": "value"}, None)
+
+        assert result == {"arg": "value"}
+        assert tracker_true.before_tool_calls == []
+        assert tracker_false.before_tool_calls == [("my_tool", {"arg": "value"})]
+
+    async def test_before_tool_call_executes_sequence_in_order(self) -> None:
+        """Test before_tool_call executes middleware sequence in order."""
+        calls: list[str] = []
+
+        class OrderTracker(AgentMiddleware[None]):
+            def __init__(self, name: str) -> None:
+                self.name = name
+
+            async def before_tool_call(
+                self,
+                tool_name: str,
+                tool_args: dict[str, Any],
+                deps: None,
+                ctx: ScopedContext | None = None,
+            ) -> dict[str, Any]:
+                calls.append(self.name)
+                return tool_args
+
+        mw1 = OrderTracker("first")
+        mw2 = OrderTracker("second")
+        cond = ConditionalMiddleware(
+            condition=lambda ctx: True,
+            when_true=[mw1, mw2],
+        )
+
+        await cond.before_tool_call("my_tool", {"arg": "value"}, None)
+
+        assert calls == ["first", "second"]
 
 
 class TestConditionalMiddlewareAfterToolCall:
@@ -565,6 +656,23 @@ class TestConditionalMiddlewareOnError:
         assert result is None
         assert tracker.on_error_calls == []
 
+    async def test_on_error_executes_when_false(self) -> None:
+        """Test on_error executes when_false middleware."""
+        tracker_true = TrackingMiddleware("true")
+        tracker_false = TrackingMiddleware("false")
+        cond = ConditionalMiddleware(
+            condition=lambda ctx: False,
+            when_true=tracker_true,
+            when_false=tracker_false,
+        )
+
+        error = ValueError("test error")
+        result = await cond.on_error(error, None)
+
+        assert result is None
+        assert tracker_true.on_error_calls == []
+        assert tracker_false.on_error_calls == [error]
+
     async def test_on_error_can_convert_exception(self) -> None:
         """Test on_error can convert exceptions."""
         converter = ErrorConvertingMiddleware()
@@ -578,6 +686,35 @@ class TestConditionalMiddlewareOnError:
 
         assert isinstance(result, RuntimeError)
         assert "Converted:" in str(result)
+
+    async def test_on_error_sequence_short_circuits(self) -> None:
+        """Test on_error stops when middleware returns a handled error."""
+        calls: list[str] = []
+
+        class ReturningMiddleware(AgentMiddleware[None]):
+            async def on_error(
+                self, error: Exception, deps: None, ctx: ScopedContext | None = None
+            ) -> Exception | None:
+                calls.append("first")
+                return RuntimeError("handled")
+
+        class TrackingErrorMiddleware(AgentMiddleware[None]):
+            async def on_error(
+                self, error: Exception, deps: None, ctx: ScopedContext | None = None
+            ) -> Exception | None:
+                calls.append("second")
+                return None
+
+        cond = ConditionalMiddleware(
+            condition=lambda ctx: True,
+            when_true=[ReturningMiddleware(), TrackingErrorMiddleware()],
+        )
+
+        error = ValueError("original")
+        result = await cond.on_error(error, None)
+
+        assert isinstance(result, RuntimeError)
+        assert calls == ["first"]
 
 
 class TestConditionalMiddlewareConditionContext:
