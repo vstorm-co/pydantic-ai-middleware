@@ -552,7 +552,7 @@ class TestMiddlewareChainOperators:
 
     def test_iadd_operator_invalid_type(self) -> None:
         """Test += operator with invalid type raises error."""
-        chain: MiddlewareChain = MiddlewareChain()
+        chain: MiddlewareChain[None] = MiddlewareChain()
 
         with pytest.raises(
             TypeError, match="MiddlewareChain.add expects AgentMiddleware or MiddlewareChain"
@@ -1220,7 +1220,7 @@ class TestMiddlewareChainErrors:
 
     def test_add_invalid_type(self):
         """Adding invalid type raises error."""
-        chain: MiddlewareChain = MiddlewareChain()
+        chain: MiddlewareChain[None] = MiddlewareChain()
         with pytest.raises(
             TypeError, match="MiddlewareChain.add expects AgentMiddleware or MiddlewareChain"
         ):
@@ -1228,7 +1228,7 @@ class TestMiddlewareChainErrors:
 
     def test_insert_invalid_type(self):
         """Inserting invalid type raises error."""
-        chain: MiddlewareChain = MiddlewareChain()
+        chain: MiddlewareChain[None] = MiddlewareChain()
         with pytest.raises(
             TypeError, match="MiddlewareChain.insert expects AgentMiddleware or MiddlewareChain"
         ):
@@ -1261,7 +1261,7 @@ class TestMiddlewareChainErrors:
 
     def test_add_operator_invalid_type(self):
         """Adding with + operator with invalid type raises error."""
-        chain: MiddlewareChain = MiddlewareChain()
+        chain: MiddlewareChain[None] = MiddlewareChain()
 
         with pytest.raises(
             TypeError, match="MiddlewareChain \\+ expects AgentMiddleware or MiddlewareChain"

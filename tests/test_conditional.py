@@ -203,7 +203,7 @@ class TestConditionalMiddlewareInit:
         mw1 = TrackingMiddleware("mw1")
         mw2 = TrackingMiddleware("mw2")
 
-        class MiddlewareSequence(list):
+        class MiddlewareSequence(list[TrackingMiddleware]):
             pass
 
         seq = MiddlewareSequence([mw1, mw2])
