@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar, cast
 
 from .base import AgentMiddleware, DepsT
 from .builder import MiddlewareFactory, Predicate, PredicateFactory, build_middleware_list
@@ -14,7 +14,7 @@ from .exceptions import MiddlewareConfigError
 
 def _load_yaml(text: str) -> Any:
     try:
-        import yaml
+        import yaml  # type: ignore[import-untyped]
     except ImportError as exc:
         raise MiddlewareConfigError("YAML support requires PyYAML") from exc
     return yaml.safe_load(text)
@@ -22,10 +22,10 @@ def _load_yaml(text: str) -> Any:
 
 def _dump_yaml(data: Any) -> str:
     try:
-        import yaml
+        import yaml  # type: ignore[import-untyped]
     except ImportError as exc:
         raise MiddlewareConfigError("YAML support requires PyYAML") from exc
-    return yaml.safe_dump(data, sort_keys=True)
+    return cast(str, yaml.safe_dump(data, sort_keys=True))
 
 
 def load_middleware_config_text(
@@ -82,15 +82,19 @@ def save_middleware_config_path(
     config_path.write_text(text, encoding="utf-8")
 
 
+_FactoryT = TypeVar("_FactoryT", bound=Callable[..., Any])
+_PredicateT = TypeVar("_PredicateT", bound=Callable[..., Any])
+
+
 def register_middleware(
-    registry: dict[str, MiddlewareFactory[DepsT]],
-    factory: MiddlewareFactory[DepsT] | None = None,
+    registry: dict[str, Any],
+    factory: _FactoryT | None = None,
     *,
     name: str | None = None,
-) -> Callable[[MiddlewareFactory[DepsT]], MiddlewareFactory[DepsT]] | MiddlewareFactory[DepsT]:
+) -> Callable[[_FactoryT], _FactoryT] | _FactoryT:
     """Register a middleware factory in a registry (decorator-friendly)."""
 
-    def _register(item: MiddlewareFactory[DepsT]) -> MiddlewareFactory[DepsT]:
+    def _register(item: _FactoryT) -> _FactoryT:
         key = name or item.__name__
         if key in registry:
             raise MiddlewareConfigError(f"Middleware '{key}' is already registered")
@@ -103,18 +107,14 @@ def register_middleware(
 
 
 def register_predicate(
-    registry: dict[str, PredicateFactory | Predicate],
-    predicate: PredicateFactory | Predicate | None = None,
+    registry: dict[str, Any],
+    predicate: _PredicateT | None = None,
     *,
     name: str | None = None,
-) -> (
-    Callable[[PredicateFactory | Predicate], PredicateFactory | Predicate]
-    | PredicateFactory
-    | Predicate
-):
+) -> Callable[[_PredicateT], _PredicateT] | _PredicateT:
     """Register a predicate in a registry (decorator-friendly)."""
 
-    def _register(item: PredicateFactory | Predicate) -> PredicateFactory | Predicate:
+    def _register(item: _PredicateT) -> _PredicateT:
         key = name or getattr(item, "__name__", None)
         if not key:
             raise MiddlewareConfigError("Predicate name is required for registration")

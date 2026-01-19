@@ -10,12 +10,15 @@ from __future__ import annotations
 from .agent import MiddlewareAgent
 from .async_guardrail import AsyncGuardrailMiddleware
 from .base import AgentMiddleware
-from .builder import MiddlewarePipelineCompiler, MiddlewareRegistry
+from .builder import (
+    MiddlewareFactory,
+    MiddlewarePipelineCompiler,
+    MiddlewareRegistry,
+    PredicateFactory,
+)
 from .chain import MiddlewareChain
 from .conditional import ConditionalMiddleware
 from .config_loaders import (
-    MiddlewareFactory,
-    PredicateFactory,
     dump_middleware_config,
     load_middleware_config_path,
     load_middleware_config_text,

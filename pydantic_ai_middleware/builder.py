@@ -16,11 +16,14 @@ from dataclasses import dataclass, field
 from typing import Any, Generic, TypeVar, cast
 
 from .base import AgentMiddleware, DepsT
-from .conditional import ConditionalMiddleware, Predicate, PredicateFactory
+from .conditional import ConditionalMiddleware
+from .context import ScopedContext
 from .exceptions import MiddlewareConfigError
 from .strategies import AggregationStrategy
 
 MiddlewareFactory = Callable[..., AgentMiddleware[DepsT]]
+Predicate = Callable[[ScopedContext | None], bool]
+PredicateFactory = Callable[..., Predicate]
 
 NodeHandler = Callable[
     ["MiddlewarePipelineCompiler[Any]", Mapping[str, Any]],
