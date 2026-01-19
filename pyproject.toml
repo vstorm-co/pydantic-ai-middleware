@@ -33,6 +33,9 @@ dev = [
     "ruff>=0.8.0",
     "pyright>=1.1.0",
 ]
+yaml = [
+    "PyYAML>=6.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/vstorm-co/pydantic-ai-middleware"
