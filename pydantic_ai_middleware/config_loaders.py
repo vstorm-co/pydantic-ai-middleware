@@ -12,6 +12,22 @@ from .builder import MiddlewareFactory, Predicate, PredicateFactory, build_middl
 from .exceptions import MiddlewareConfigError
 
 
+def _load_yaml(text: str) -> Any:
+    try:
+        import yaml
+    except ImportError as exc:
+        raise MiddlewareConfigError("YAML support requires PyYAML") from exc
+    return yaml.safe_load(text)
+
+
+def _dump_yaml(data: Any) -> str:
+    try:
+        import yaml
+    except ImportError as exc:
+        raise MiddlewareConfigError("YAML support requires PyYAML") from exc
+    return yaml.safe_dump(data, sort_keys=True)
+
+
 def load_middleware_config_text(
     text: str,
     *,
@@ -34,7 +50,7 @@ def load_middleware_config_path(
 ) -> list[AgentMiddleware[DepsT]]:
     """Load middleware pipeline from a file path."""
     config_path = Path(path)
-    text = config_path.read_text()
+    text = config_path.read_text(encoding="utf-8")
     fmt = _detect_format(text=text, format=format, path=config_path)
     raw = _load_text(text, fmt)
     return build_middleware_list(raw, registry=registry, predicates=predicates)
@@ -63,7 +79,7 @@ def save_middleware_config_path(
     config_path = Path(path)
     fmt = _detect_format(format=format, path=config_path)
     text = dump_middleware_config(config, format=fmt)
-    config_path.write_text(text)
+    config_path.write_text(text, encoding="utf-8")
 
 
 def register_middleware(
@@ -155,22 +171,6 @@ def _load_text(text: str, fmt: str) -> Any:
     return _load_yaml(text)
 
 
-def _load_yaml(text: str) -> Any:
-    try:
-        import yaml
-    except ImportError as exc:
-        raise MiddlewareConfigError("YAML support requires PyYAML") from exc
-    return yaml.safe_load(text)
-
-
-def _dump_yaml(data: Any) -> str:
-    try:
-        import yaml
-    except ImportError as exc:
-        raise MiddlewareConfigError("YAML support requires PyYAML") from exc
-    return yaml.safe_dump(data, sort_keys=True)
-
-
 def _normalize_config(
     config: Mapping[str, Any] | Sequence[Mapping[str, Any]],
 ) -> list[Mapping[str, Any]] | Mapping[str, Any]:
@@ -187,34 +187,13 @@ def _normalize_node(node: Mapping[str, Any]) -> Mapping[str, Any]:
     normalized: dict[str, Any] = dict(node)
 
     if "chain" in normalized:
-        chain = normalized["chain"]
-        normalized["chain"] = _normalize_list_node(chain, "chain")
+        normalized["chain"] = _normalize_chain_node(normalized["chain"])
 
     if "parallel" in normalized:
-        parallel = normalized["parallel"]
-        if not isinstance(parallel, Mapping):
-            raise MiddlewareConfigError(
-                f"parallel spec must be a mapping, got {type(parallel).__name__}"
-            )
-        parallel_dict = dict(parallel)
-        if "middleware" in parallel_dict:
-            parallel_dict["middleware"] = _normalize_list_node(
-                parallel_dict["middleware"], "parallel.middleware"
-            )
-        normalized["parallel"] = parallel_dict
+        normalized["parallel"] = _normalize_parallel_node(normalized["parallel"])
 
     if "when" in normalized:
-        when_node = normalized["when"]
-        if not isinstance(when_node, Mapping):
-            raise MiddlewareConfigError(
-                f"when spec must be a mapping, got {type(when_node).__name__}"
-            )
-        when_dict = dict(when_node)
-        if "then" in when_dict:
-            when_dict["then"] = _normalize_list_node(when_dict["then"], "when.then")
-        if "else" in when_dict and when_dict["else"] is not None:
-            when_dict["else"] = _normalize_list_node(when_dict["else"], "when.else")
-        normalized["when"] = when_dict
+        normalized["when"] = _normalize_when_node(normalized["when"])
 
     return normalized
 
@@ -237,3 +216,29 @@ def _normalize_list_node(value: Any, label: str) -> list[Mapping[str, Any]]:
             )
         result.append(_normalize_node(item))
     return result
+
+
+def _normalize_chain_node(value: Any) -> list[Mapping[str, Any]]:
+    return _normalize_list_node(value, "chain")
+
+
+def _normalize_parallel_node(value: Any) -> Mapping[str, Any]:
+    if not isinstance(value, Mapping):
+        raise MiddlewareConfigError(f"parallel spec must be a mapping, got {type(value).__name__}")
+    parallel_dict = dict(value)
+    if "middleware" in parallel_dict:
+        parallel_dict["middleware"] = _normalize_list_node(
+            parallel_dict["middleware"], "parallel.middleware"
+        )
+    return parallel_dict
+
+
+def _normalize_when_node(value: Any) -> Mapping[str, Any]:
+    if not isinstance(value, Mapping):
+        raise MiddlewareConfigError(f"when spec must be a mapping, got {type(value).__name__}")
+    when_dict = dict(value)
+    if "then" in when_dict:
+        when_dict["then"] = _normalize_list_node(when_dict["then"], "when.then")
+    if "else" in when_dict and when_dict["else"] is not None:
+        when_dict["else"] = _normalize_list_node(when_dict["else"], "when.else")
+    return when_dict
