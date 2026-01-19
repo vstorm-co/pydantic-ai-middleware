@@ -10,6 +10,7 @@ from __future__ import annotations
 from .agent import MiddlewareAgent
 from .async_guardrail import AsyncGuardrailMiddleware
 from .base import AgentMiddleware
+from .builder import MiddlewarePipelineCompiler, MiddlewareRegistry
 from .chain import MiddlewareChain
 from .conditional import ConditionalMiddleware
 from .config_loaders import (
@@ -67,6 +68,8 @@ __all__ = [
     "register_predicate",
     "MiddlewareFactory",
     "PredicateFactory",
+    "MiddlewareRegistry",
+    "MiddlewarePipelineCompiler",
     # Context
     "MiddlewareContext",
     "ScopedContext",
