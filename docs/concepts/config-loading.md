@@ -63,21 +63,32 @@ middleware = load_middleware_config_text(config_text, registry=registry)
 middleware = load_middleware_config_path("pipeline.yaml", registry=registry)
 ```
 
+## Registry and compiler
+
+```python
+from pydantic_ai_middleware import MiddlewarePipelineCompiler, MiddlewareRegistry
+
+reg = MiddlewareRegistry(middleware=registry)
+compiler = MiddlewarePipelineCompiler(registry=reg)
+middleware = compiler.compile(config_data)
+middleware_list = compiler.compile_list(config_data)
+```
+
 ## Predicates for conditional nodes
 
 ```python
-from pydantic_ai_middleware import register_predicate
+from pydantic_ai_middleware import MiddlewareRegistry
 
-predicates: dict[str, object] = {}
+reg = MiddlewareRegistry(middleware=registry)
 
-@register_predicate(predicates)
+@reg.predicate("is_admin")
 def is_admin(ctx):
     return ctx is not None and ctx.config.get("role") == "admin"
 
 middleware = load_middleware_config_text(
     config_text,
-    registry=registry,
-    predicates=predicates,
+    registry=reg.middleware,
+    predicates=reg.predicates,
 )
 ```
 
