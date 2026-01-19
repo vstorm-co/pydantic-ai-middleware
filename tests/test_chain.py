@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from pydantic_ai.messages import ModelMessage
@@ -15,6 +15,7 @@ from pydantic_ai_middleware import (
     MiddlewareContext,
     ScopedContext,
 )
+from pydantic_ai_middleware.exceptions import InputBlocked, OutputBlocked, ToolBlocked
 
 
 class TrackingMiddleware(AgentMiddleware[None]):
@@ -109,6 +110,71 @@ class ErrorHandlerMiddleware(AgentMiddleware[None]):
         ctx: ScopedContext | None = None,
     ) -> Exception | None:
         return ValueError(f"Handled by {self.name}: {error}")
+
+
+class ContextSpyMiddleware(AgentMiddleware[None]):
+    """Middleware that captures the last context passed to each hook."""
+
+    def __init__(self) -> None:
+        self.last_ctx: ScopedContext | None = None
+
+    async def before_run(
+        self,
+        prompt: str | Sequence[Any],
+        deps: None,
+        ctx: ScopedContext | None = None,
+    ) -> str | Sequence[Any]:
+        self.last_ctx = ctx
+        return prompt
+
+    async def after_run(
+        self,
+        prompt: str | Sequence[Any],
+        output: Any,
+        deps: None,
+        ctx: ScopedContext | None = None,
+    ) -> Any:
+        self.last_ctx = ctx
+        return output
+
+    async def before_model_request(
+        self,
+        messages: list[ModelMessage],
+        deps: None,
+        ctx: ScopedContext | None = None,
+    ) -> list[ModelMessage]:
+        self.last_ctx = ctx
+        return messages
+
+    async def before_tool_call(
+        self,
+        tool_name: str,
+        tool_args: dict[str, Any],
+        deps: None,
+        ctx: ScopedContext | None = None,
+    ) -> dict[str, Any]:
+        self.last_ctx = ctx
+        return tool_args
+
+    async def after_tool_call(
+        self,
+        tool_name: str,
+        tool_args: dict[str, Any],
+        result: Any,
+        deps: None,
+        ctx: ScopedContext | None = None,
+    ) -> Any:
+        self.last_ctx = ctx
+        return result
+
+    async def on_error(
+        self,
+        error: Exception,
+        deps: None,
+        ctx: ScopedContext | None = None,
+    ) -> Exception | None:
+        self.last_ctx = ctx
+        return None
 
 
 @pytest.fixture(autouse=True)
@@ -209,6 +275,27 @@ class TestMiddlewareChainModification:
 
         assert chain.middleware == [mw1, mw2]
 
+    def test_insert_at_end(self) -> None:
+        """Test inserting middleware at the end."""
+        mw1 = TrackingMiddleware("mw1")
+        mw2 = TrackingMiddleware("mw2")
+        chain = MiddlewareChain([mw1])
+
+        chain.insert(1, mw2)
+
+        assert chain.middleware == [mw1, mw2]
+
+    def test_insert_negative_index(self) -> None:
+        """Test inserting middleware with negative index."""
+        mw1 = TrackingMiddleware("mw1")
+        mw2 = TrackingMiddleware("mw2")
+        mw3 = TrackingMiddleware("mw3")
+        chain = MiddlewareChain([mw1, mw3])
+
+        chain.insert(-1, mw2)
+
+        assert chain.middleware == [mw1, mw2, mw3]
+
     def test_insert_chain_flattens(self) -> None:
         """Test inserting a chain flattens it in order."""
         mw1 = TrackingMiddleware("mw1")
@@ -222,6 +309,30 @@ class TestMiddlewareChainModification:
         chain1.insert(1, chain2)
 
         assert chain1.middleware == [mw1, mw2, mw3, mw4]
+
+    def test_insert_chain_at_end(self) -> None:
+        """Test inserting a chain at the end."""
+        mw1 = TrackingMiddleware("mw1")
+        chain = MiddlewareChain([mw1])
+
+        mw2 = TrackingMiddleware("mw2")
+        mw3 = TrackingMiddleware("mw3")
+        chain2 = MiddlewareChain([mw2, mw3])
+
+        chain.insert(len(chain), chain2)
+
+        assert chain.middleware == [mw1, mw2, mw3]
+
+    def test_insert_empty_chain(self) -> None:
+        """Test inserting an empty chain leaves order unchanged."""
+        mw1 = TrackingMiddleware("mw1")
+        mw2 = TrackingMiddleware("mw2")
+        chain = MiddlewareChain([mw1, mw2])
+        empty_chain: MiddlewareChain[None] = MiddlewareChain()
+
+        chain.insert(1, empty_chain)
+
+        assert chain.middleware == [mw1, mw2]
 
     def test_remove_middleware(self) -> None:
         """Test removing middleware from the chain."""
@@ -268,6 +379,17 @@ class TestMiddlewareChainModification:
         assert len(chain) == 1
         assert chain.middleware == [mw2]
 
+    def test_pop_negative_index(self) -> None:
+        """Test pop with a negative index."""
+        mw1 = TrackingMiddleware("mw1")
+        mw2 = TrackingMiddleware("mw2")
+        chain = MiddlewareChain([mw1, mw2])
+
+        popped = chain.pop(-2)
+
+        assert popped is mw1
+        assert chain.middleware == [mw2]
+
     def test_pop_empty_raises(self) -> None:
         """Test pop on empty chain raises IndexError."""
         chain: MiddlewareChain[None] = MiddlewareChain()
@@ -286,6 +408,41 @@ class TestMiddlewareChainModification:
 
         assert chain.middleware == [mw1, mw3]
         assert result is chain
+
+    def test_replace_first_item(self) -> None:
+        """Test replacing the first middleware."""
+        mw1 = TrackingMiddleware("mw1")
+        mw2 = TrackingMiddleware("mw2")
+        mw3 = TrackingMiddleware("mw3")
+        chain = MiddlewareChain([mw1, mw2])
+
+        chain.replace(mw1, mw3)
+
+        assert chain.middleware == [mw3, mw2]
+
+    def test_replace_last_item(self) -> None:
+        """Test replacing the last middleware."""
+        mw1 = TrackingMiddleware("mw1")
+        mw2 = TrackingMiddleware("mw2")
+        mw3 = TrackingMiddleware("mw3")
+        chain = MiddlewareChain([mw1, mw2])
+
+        chain.replace(mw2, mw3)
+
+        assert chain.middleware == [mw1, mw3]
+
+    def test_replace_with_chain_multiple_items(self) -> None:
+        """Test replacing middleware with a multi-item chain."""
+        mw1 = TrackingMiddleware("mw1")
+        mw2 = TrackingMiddleware("mw2")
+        mw3 = TrackingMiddleware("mw3")
+        mw4 = TrackingMiddleware("mw4")
+        chain = MiddlewareChain([mw1, mw4])
+        replacement_chain = MiddlewareChain([mw2, mw3])
+
+        chain.replace(mw4, replacement_chain)
+
+        assert chain.middleware == [mw1, mw2, mw3]
 
     def test_replace_nonexistent_raises(self) -> None:
         """Test replacing nonexistent middleware raises ValueError."""
@@ -324,6 +481,21 @@ class TestMiddlewareChainModification:
         copied.add(mw3)
         assert len(chain) == 2
         assert len(copied) == 3
+
+    def test_copy_empty_chain(self) -> None:
+        """Test copying an empty chain."""
+        chain: MiddlewareChain[None] = MiddlewareChain()
+        copied = chain.copy()
+
+        assert len(copied) == 0
+        assert copied.middleware == []
+
+    def test_copy_preserves_name(self) -> None:
+        """Test copying preserves the custom name."""
+        chain: MiddlewareChain[None] = MiddlewareChain(name="custom")
+        copied = chain.copy()
+
+        assert copied.name == "custom"
 
 
 class TestMiddlewareChainOperators:
@@ -378,6 +550,24 @@ class TestMiddlewareChainOperators:
         assert len(chain1) == 2
         assert chain1.middleware == [mw1, mw2]
 
+    def test_iadd_operator_invalid_type(self) -> None:
+        """Test += operator with invalid type raises error."""
+        chain: MiddlewareChain = MiddlewareChain()
+
+        with pytest.raises(
+            TypeError, match="MiddlewareChain.add expects AgentMiddleware or MiddlewareChain"
+        ):
+            chain += "not a middleware"  # type: ignore
+
+    def test_add_empty_chains(self) -> None:
+        """Test + operator with empty chains."""
+        chain1: MiddlewareChain[None] = MiddlewareChain()
+        chain2: MiddlewareChain[None] = MiddlewareChain()
+
+        combined = chain1 + chain2
+
+        assert len(combined) == 0
+
 
 class TestMiddlewareChainCollection:
     """Tests for MiddlewareChain collection interface."""
@@ -419,6 +609,14 @@ class TestMiddlewareChainCollection:
 
         assert chain[1:] == [mw2, mw3]
         assert chain[:2] == [mw1, mw2]
+
+    def test_getitem_out_of_bounds(self) -> None:
+        """Test [] indexing out of bounds raises IndexError."""
+        mw1 = TrackingMiddleware("mw1")
+        chain = MiddlewareChain([mw1])
+
+        with pytest.raises(IndexError):
+            _ = chain[1]
 
     def test_iter(self) -> None:
         """Test iteration."""
@@ -558,6 +756,18 @@ class TestMiddlewareChainAfterRun:
             "mw1:after_run",
         ]
 
+    async def test_after_run_with_context(self) -> None:
+        """Test after_run passes context to middleware."""
+        mw = ContextSpyMiddleware()
+        chain = MiddlewareChain([mw])
+        ctx = MiddlewareContext()
+        scoped = ctx.for_hook(HookType.AFTER_RUN)
+
+        result = await chain.after_run("prompt", "output", None, ctx=scoped)
+
+        assert result == "output"
+        assert mw.last_ctx is scoped
+
 
 class TestMiddlewareChainBeforeModelRequest:
     """Tests for MiddlewareChain.before_model_request()."""
@@ -568,6 +778,17 @@ class TestMiddlewareChainBeforeModelRequest:
         messages: list[ModelMessage] = []
         result = await chain.before_model_request(messages, None)
         assert result == []
+
+    async def test_before_model_request_single_middleware(self) -> None:
+        """Test before_model_request with single middleware."""
+        mw = TrackingMiddleware("mw1")
+        chain = MiddlewareChain([mw])
+        messages: list[ModelMessage] = []
+
+        result = await chain.before_model_request(messages, None)
+
+        assert result == []
+        assert mw.before_model_called
 
     async def test_before_model_request_order(self) -> None:
         """Test before_model_request executes in order."""
@@ -583,9 +804,65 @@ class TestMiddlewareChainBeforeModelRequest:
             "mw2:before_model",
         ]
 
+    async def test_before_model_request_return_propagation(self) -> None:
+        """Test before_model_request propagates modified messages."""
+        msg1 = cast(ModelMessage, object())
+        msg2 = cast(ModelMessage, object())
+
+        class ModifyingMiddleware(AgentMiddleware[None]):
+            def __init__(self, msg: ModelMessage) -> None:
+                self.msg = msg
+
+            async def before_model_request(
+                self,
+                messages: list[ModelMessage],
+                deps: None,
+                ctx: ScopedContext | None = None,
+            ) -> list[ModelMessage]:
+                return [*messages, self.msg]
+
+        mw1 = ModifyingMiddleware(msg1)
+        mw2 = ModifyingMiddleware(msg2)
+        chain = MiddlewareChain([mw1, mw2])
+
+        result = await chain.before_model_request([], None)
+
+        assert result == [msg1, msg2]
+
+    async def test_before_model_request_with_context(self) -> None:
+        """Test before_model_request passes context to middleware."""
+        mw = ContextSpyMiddleware()
+        chain = MiddlewareChain([mw])
+        ctx = MiddlewareContext()
+        scoped = ctx.for_hook(HookType.BEFORE_MODEL_REQUEST)
+        messages: list[ModelMessage] = []
+
+        result = await chain.before_model_request(messages, None, ctx=scoped)
+
+        assert result == []
+        assert mw.last_ctx is scoped
+
 
 class TestMiddlewareChainToolCalls:
     """Tests for MiddlewareChain tool call hooks."""
+
+    async def test_before_tool_call_empty_chain(self) -> None:
+        """Test before_tool_call with empty chain."""
+        chain: MiddlewareChain[None] = MiddlewareChain()
+
+        result = await chain.before_tool_call("test_tool", {"arg": "value"}, None)
+
+        assert result == {"arg": "value"}
+
+    async def test_before_tool_call_single_middleware(self) -> None:
+        """Test before_tool_call with single middleware."""
+        mw = TrackingMiddleware("mw1")
+        chain = MiddlewareChain([mw])
+
+        result = await chain.before_tool_call("test_tool", {"arg": "value"}, None)
+
+        assert result == {"arg": "value", "mw1": True}
+        assert mw.before_tool_called
 
     async def test_before_tool_call_order(self) -> None:
         """Test before_tool_call executes in order."""
@@ -601,6 +878,41 @@ class TestMiddlewareChainToolCalls:
             "mw2:before_tool",
         ]
 
+    async def test_before_tool_call_with_context(self) -> None:
+        """Test before_tool_call passes context to middleware."""
+        mw = ContextSpyMiddleware()
+        chain = MiddlewareChain([mw])
+        ctx = MiddlewareContext()
+        scoped = ctx.for_hook(HookType.BEFORE_TOOL_CALL)
+
+        result = await chain.before_tool_call(
+            "test_tool",
+            {"arg": "value"},
+            None,
+            ctx=scoped,
+        )
+
+        assert result == {"arg": "value"}
+        assert mw.last_ctx is scoped
+
+    async def test_after_tool_call_empty_chain(self) -> None:
+        """Test after_tool_call with empty chain."""
+        chain: MiddlewareChain[None] = MiddlewareChain()
+
+        result = await chain.after_tool_call("test_tool", {"arg": "value"}, "result", None)
+
+        assert result == "result"
+
+    async def test_after_tool_call_single_middleware(self) -> None:
+        """Test after_tool_call with single middleware."""
+        mw = TrackingMiddleware("mw1")
+        chain = MiddlewareChain([mw])
+
+        result = await chain.after_tool_call("test_tool", {"arg": "value"}, "result", None)
+
+        assert result == "[mw1]result"
+        assert mw.after_tool_called
+
     async def test_after_tool_call_reverse_order(self) -> None:
         """Test after_tool_call executes in reverse order."""
         mw1 = TrackingMiddleware("mw1")
@@ -615,6 +927,24 @@ class TestMiddlewareChainToolCalls:
             "mw2:after_tool",
             "mw1:after_tool",
         ]
+
+    async def test_after_tool_call_with_context(self) -> None:
+        """Test after_tool_call passes context to middleware."""
+        mw = ContextSpyMiddleware()
+        chain = MiddlewareChain([mw])
+        ctx = MiddlewareContext()
+        scoped = ctx.for_hook(HookType.AFTER_TOOL_CALL)
+
+        result = await chain.after_tool_call(
+            "test_tool",
+            {"arg": "value"},
+            "result",
+            None,
+            ctx=scoped,
+        )
+
+        assert result == "result"
+        assert mw.last_ctx is scoped
 
 
 class TestMiddlewareChainOnError:
@@ -651,6 +981,31 @@ class TestMiddlewareChainOnError:
         assert "mw1" in str(result)
         # mw2 should not be called since mw1 handled it
 
+    async def test_on_error_context(self) -> None:
+        """Test on_error passes context to middleware."""
+        mw = ContextSpyMiddleware()
+        chain = MiddlewareChain([mw])
+        ctx = MiddlewareContext()
+        scoped = ctx.for_hook(HookType.ON_ERROR)
+
+        error = ValueError("test")
+        result = await chain.on_error(error, None, ctx=scoped)
+
+        assert result is None
+        assert mw.last_ctx is scoped
+
+    async def test_on_error_stops_after_handled(self) -> None:
+        """Test on_error stops after first handler returns exception."""
+        mw1 = ErrorHandlerMiddleware("mw1")
+        mw2 = TrackingMiddleware("mw2")
+        chain = MiddlewareChain([mw1, mw2])
+
+        error = ValueError("original")
+        result = await chain.on_error(error, None)
+
+        assert result is not None
+        assert not mw2.on_error_called
+
 
 class TestMiddlewareChainNested:
     """Tests for nested MiddlewareChain scenarios."""
@@ -672,6 +1027,24 @@ class TestMiddlewareChainNested:
             "mw1:before_run",
             "mw2:before_run",
             "mw3:before_run",
+        ]
+
+    async def test_nested_chains_after_run_order(self) -> None:
+        """Test nested chains after_run preserves reverse order."""
+        mw1 = TrackingMiddleware("mw1")
+        mw2 = TrackingMiddleware("mw2")
+        inner_chain = MiddlewareChain([mw1, mw2])
+
+        mw3 = TrackingMiddleware("mw3")
+        outer_chain = MiddlewareChain([inner_chain, mw3])
+
+        result = await outer_chain.after_run("prompt", "output", None)
+
+        assert result == "[mw1][mw2][mw3]output"
+        assert TrackingMiddleware.call_order == [
+            "mw3:after_run",
+            "mw2:after_run",
+            "mw1:after_run",
         ]
 
     async def test_deeply_nested_chains(self) -> None:
@@ -847,7 +1220,7 @@ class TestMiddlewareChainErrors:
 
     def test_add_invalid_type(self):
         """Adding invalid type raises error."""
-        chain = MiddlewareChain()
+        chain: MiddlewareChain = MiddlewareChain()
         with pytest.raises(
             TypeError, match="MiddlewareChain.add expects AgentMiddleware or MiddlewareChain"
         ):
@@ -855,7 +1228,7 @@ class TestMiddlewareChainErrors:
 
     def test_insert_invalid_type(self):
         """Inserting invalid type raises error."""
-        chain = MiddlewareChain()
+        chain: MiddlewareChain = MiddlewareChain()
         with pytest.raises(
             TypeError, match="MiddlewareChain.insert expects AgentMiddleware or MiddlewareChain"
         ):
@@ -888,9 +1261,83 @@ class TestMiddlewareChainErrors:
 
     def test_add_operator_invalid_type(self):
         """Adding with + operator with invalid type raises error."""
-        chain = MiddlewareChain()
+        chain: MiddlewareChain = MiddlewareChain()
 
         with pytest.raises(
             TypeError, match="MiddlewareChain \\+ expects AgentMiddleware or MiddlewareChain"
         ):
             chain + "not a middleware"  # type: ignore
+
+
+class TestMiddlewareChainExceptionPropagation:
+    """Tests for exception propagation in MiddlewareChain."""
+
+    async def test_before_run_exception_propagates(self) -> None:
+        """Test before_run propagates exceptions."""
+
+        class ExplodingMiddleware(AgentMiddleware[None]):
+            async def before_run(
+                self,
+                prompt: str | Sequence[Any],
+                deps: None,
+                ctx: ScopedContext | None = None,
+            ) -> str | Sequence[Any]:
+                raise RuntimeError("boom")
+
+        chain = MiddlewareChain([ExplodingMiddleware()])
+
+        with pytest.raises(RuntimeError, match="boom"):
+            await chain.before_run("test", None)
+
+    async def test_input_blocked_exception_propagates(self) -> None:
+        """Test InputBlocked propagates from before_run."""
+
+        class BlockingMiddleware(AgentMiddleware[None]):
+            async def before_run(
+                self,
+                prompt: str | Sequence[Any],
+                deps: None,
+                ctx: ScopedContext | None = None,
+            ) -> str | Sequence[Any]:
+                raise InputBlocked("nope")
+
+        chain = MiddlewareChain([BlockingMiddleware()])
+
+        with pytest.raises(InputBlocked, match="nope"):
+            await chain.before_run("test", None)
+
+    async def test_tool_blocked_exception_propagates(self) -> None:
+        """Test ToolBlocked propagates from before_tool_call."""
+
+        class BlockingMiddleware(AgentMiddleware[None]):
+            async def before_tool_call(
+                self,
+                tool_name: str,
+                tool_args: dict[str, Any],
+                deps: None,
+                ctx: ScopedContext | None = None,
+            ) -> dict[str, Any]:
+                raise ToolBlocked(tool_name, "nope")
+
+        chain = MiddlewareChain([BlockingMiddleware()])
+
+        with pytest.raises(ToolBlocked, match="nope"):
+            await chain.before_tool_call("test_tool", {"arg": "value"}, None)
+
+    async def test_output_blocked_exception_propagates(self) -> None:
+        """Test OutputBlocked propagates from after_run."""
+
+        class BlockingMiddleware(AgentMiddleware[None]):
+            async def after_run(
+                self,
+                prompt: str | Sequence[Any],
+                output: Any,
+                deps: None,
+                ctx: ScopedContext | None = None,
+            ) -> Any:
+                raise OutputBlocked("nope")
+
+        chain = MiddlewareChain([BlockingMiddleware()])
+
+        with pytest.raises(OutputBlocked, match="nope"):
+            await chain.after_run("prompt", "output", None)
