@@ -51,6 +51,11 @@ def test_node_helpers() -> None:
     parallel_string = parallel_node([{"type": "a"}], strategy="race")
     assert parallel_string == {"parallel": {"middleware": [{"type": "a"}], "strategy": "race"}}
 
+    parallel_default = parallel_node([{"type": "a"}], timeout=2.0, name="p2")
+    assert parallel_default == {
+        "parallel": {"middleware": [{"type": "a"}], "timeout": 2.0, "name": "p2"}
+    }
+
     when = when_node(predicate=True, then=[{"type": "a"}], else_=[{"type": "b"}])
     assert when == {"when": {"predicate": True, "then": [{"type": "a"}], "else": [{"type": "b"}]}}
 
@@ -116,3 +121,13 @@ def test_pipeline_spec_dump_yaml_missing_dependency(monkeypatch: pytest.MonkeyPa
 def test_pipeline_spec_detect_format_helpers() -> None:
     assert pipeline_spec_module._detect_format(format="json", path=None) == "json"
     assert pipeline_spec_module._detect_format(format=None, path=Path("pipeline.yaml")) == "yaml"
+
+
+def test_pipeline_spec_detect_format_unknown_suffix() -> None:
+    with pytest.raises(MiddlewareConfigError, match="Unable to determine config format"):
+        pipeline_spec_module._detect_format(format=None, path=Path("pipeline.txt"))
+
+
+def test_pipeline_spec_detect_format_missing_inputs() -> None:
+    with pytest.raises(MiddlewareConfigError, match="Unable to determine config format"):
+        pipeline_spec_module._detect_format(format=None, path=None)

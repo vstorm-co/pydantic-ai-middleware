@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any, cast
 
@@ -149,6 +149,18 @@ def test_detect_format_missing_inputs_raises() -> None:
 
 def test_detect_format_path_yaml() -> None:
     assert _detect_format(path=Path("pipeline.yaml")) == "yaml"
+
+
+def test_load_path_unknown_suffix_uses_text(tmp_path: Path) -> None:
+    registry = {"dummy": DummyMiddleware}
+    path = tmp_path / "pipeline.txt"
+    path.write_text('[{"type": "dummy", "config": {"id": 3}}]', encoding="utf-8")
+
+    result = load_middleware_config_path(path, registry=registry)
+
+    assert len(result) == 1
+    assert isinstance(result[0], DummyMiddleware)
+    assert result[0].config == {"id": 3}
 
 
 def test_builder_type_errors() -> None:
@@ -334,8 +346,8 @@ def test_build_middleware_list_inputs() -> None:
 
 
 def test_builder_class_api() -> None:
-    registry = {"dummy": DummyMiddleware}
-    reg = MiddlewareRegistry(middleware=registry)
+    reg = MiddlewareRegistry()
+    reg.register_middleware("dummy", DummyMiddleware)
     compiler = MiddlewarePipelineCompiler(registry=reg)
 
     result = compiler.compile({"type": "dummy", "config": {"id": 1}})
@@ -420,10 +432,11 @@ def test_registry_predicate_decorator_requires_name() -> None:
 
 
 def test_compiler_register_node_handler_duplicate_raises() -> None:
-    reg: MiddlewareRegistry[None] = MiddlewareRegistry(middleware={"dummy": DummyMiddleware})
+    reg = MiddlewareRegistry()
+    reg.register_middleware("dummy", DummyMiddleware)
     compiler = MiddlewarePipelineCompiler(registry=reg)
 
-    def handler(_: MiddlewarePipelineCompiler[Any], __: dict[str, Any]) -> Any:
+    def handler(_: MiddlewarePipelineCompiler[Any], __: Mapping[str, Any]) -> Any:
         return DummyMiddleware()
 
     with pytest.raises(
@@ -436,7 +449,7 @@ def test_compiler_register_node_handler_overwrite_allows_replacement() -> None:
     reg: MiddlewareRegistry[None] = MiddlewareRegistry(middleware={"dummy": DummyMiddleware})
     compiler = MiddlewarePipelineCompiler(registry=reg)
 
-    def handler(_: MiddlewarePipelineCompiler[Any], __: dict[str, Any]) -> Any:
+    def handler(_: MiddlewarePipelineCompiler[Any], __: Mapping[str, Any]) -> Any:
         return DummyMiddleware()
 
     compiler.register_node_handler("type", handler, overwrite=True)
