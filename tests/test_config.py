@@ -346,7 +346,7 @@ def test_build_middleware_list_inputs() -> None:
 
 
 def test_builder_class_api() -> None:
-    reg = MiddlewareRegistry()
+    reg: MiddlewareRegistry[None] = MiddlewareRegistry()
     reg.register_middleware("dummy", DummyMiddleware)
     compiler = MiddlewarePipelineCompiler(registry=reg)
 
@@ -432,7 +432,7 @@ def test_registry_predicate_decorator_requires_name() -> None:
 
 
 def test_compiler_register_node_handler_duplicate_raises() -> None:
-    reg = MiddlewareRegistry()
+    reg: MiddlewareRegistry[None] = MiddlewareRegistry()
     reg.register_middleware("dummy", DummyMiddleware)
     compiler = MiddlewarePipelineCompiler(registry=reg)
 
