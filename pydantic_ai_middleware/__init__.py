@@ -19,12 +19,10 @@ from .builder import (
 from .chain import MiddlewareChain
 from .conditional import ConditionalMiddleware
 from .config_loaders import (
-    dump_middleware_config,
     load_middleware_config_path,
     load_middleware_config_text,
     register_middleware,
     register_predicate,
-    save_middleware_config_path,
 )
 from .context import (
     ContextAccessError,
@@ -51,6 +49,7 @@ from .exceptions import (
     ToolBlocked,
 )
 from .parallel import ParallelMiddleware
+from .pipeline_spec import PipelineSpec
 from .strategies import AggregationStrategy, GuardrailTiming
 from .toolset import MiddlewareToolset
 
@@ -65,14 +64,13 @@ __all__ = [
     # Config loading/saving
     "load_middleware_config_path",
     "load_middleware_config_text",
-    "dump_middleware_config",
-    "save_middleware_config_path",
     "register_middleware",
     "register_predicate",
     "MiddlewareFactory",
     "PredicateFactory",
     "MiddlewareRegistry",
     "MiddlewarePipelineCompiler",
+    "PipelineSpec",
     # Context
     "MiddlewareContext",
     "ScopedContext",

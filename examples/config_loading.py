@@ -12,7 +12,6 @@ from pydantic_ai_middleware import (
     AgentMiddleware,
     MiddlewareAgent,
     load_middleware_config_text,
-    save_middleware_config_path,
 )
 from pydantic_ai_middleware.context import ScopedContext
 
@@ -72,13 +71,6 @@ async def main() -> None:
     """
 
     middleware = load_middleware_config_text(config_text, registry=registry)
-    save_middleware_config_path(
-        [
-            {"type": "logging"},
-            {"type": "profanity"},
-        ],
-        "examples/pipeline.json",
-    )
 
     base_agent = Agent(model=TestModel())
     agent = MiddlewareAgent(agent=base_agent, middleware=middleware)

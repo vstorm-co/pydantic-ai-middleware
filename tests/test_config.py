@@ -2,18 +2,24 @@
 
 from __future__ import annotations
 
+import sys
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
 from pydantic_ai_middleware import AgentMiddleware
-from pydantic_ai_middleware.builder import build_middleware, build_middleware_list
+from pydantic_ai_middleware.builder import (
+    MiddlewarePipelineCompiler,
+    MiddlewareRegistry,
+    build_middleware,
+    build_middleware_list,
+)
 from pydantic_ai_middleware.config_loaders import (
-    dump_middleware_config,
+    _detect_format,
     load_middleware_config_path,
     load_middleware_config_text,
-    save_middleware_config_path,
 )
 from pydantic_ai_middleware.exceptions import MiddlewareConfigError
 
@@ -22,7 +28,7 @@ class DummyMiddleware(AgentMiddleware[None]):
     """Simple middleware for config tests."""
 
     def __init__(self, **config: Any) -> None:
-        self.config = config
+        self.config: dict[str, Any] = config
 
 
 class FailingMiddleware(AgentMiddleware[None]):
@@ -30,7 +36,7 @@ class FailingMiddleware(AgentMiddleware[None]):
 
     def __init__(self, required: int, **config: Any) -> None:
         self.required = required
-        self.config = config
+        self.config: dict[str, Any] = config
 
 
 def test_load_json_list() -> None:
@@ -39,8 +45,12 @@ def test_load_json_list() -> None:
     result = load_middleware_config_text(text, registry=registry, format="json")
 
     assert len(result) == 2
-    assert result[0].config == {"id": 1}
-    assert result[1].config == {"id": 2}
+    mw0 = result[0]
+    mw1 = result[1]
+    assert isinstance(mw0, DummyMiddleware)
+    assert isinstance(mw1, DummyMiddleware)
+    assert mw0.config == {"id": 1}
+    assert mw1.config == {"id": 2}
 
 
 def test_load_chain_node() -> None:
@@ -54,8 +64,12 @@ def test_load_chain_node() -> None:
     result = load_middleware_config_text(text, registry=registry, format="json")
 
     assert len(result) == 2
-    assert result[0].config == {"id": 1}
-    assert result[1].config == {"id": 2}
+    mw0 = result[0]
+    mw1 = result[1]
+    assert isinstance(mw0, DummyMiddleware)
+    assert isinstance(mw1, DummyMiddleware)
+    assert mw0.config == {"id": 1}
+    assert mw1.config == {"id": 2}
 
 
 def test_chain_invalid_type_raises() -> None:
@@ -83,27 +97,6 @@ def test_format_detection_by_content_json() -> None:
     assert len(result) == 1
 
 
-def test_dump_normalizes_chain_single_item() -> None:
-    config: Any = [{"chain": {"type": "dummy"}}]
-    result = dump_middleware_config(config, format="json")
-
-    assert '"chain"' in result
-    assert '"type": "dummy"' in result
-    assert result.lstrip().startswith("[")
-
-
-def test_save_and_load_json_path(tmp_path: Path) -> None:
-    registry = {"dummy": DummyMiddleware}
-    config = [{"type": "dummy", "config": {"id": 1}}]
-    path = tmp_path / "pipeline.json"
-
-    save_middleware_config_path(config, path)
-    result = load_middleware_config_path(path, registry=registry)
-
-    assert len(result) == 1
-    assert result[0].config == {"id": 1}
-
-
 def test_load_yaml_when_available() -> None:
     pytest.importorskip("yaml", reason="PyYAML not installed")
     registry = {"dummy": DummyMiddleware}
@@ -111,24 +104,22 @@ def test_load_yaml_when_available() -> None:
     result = load_middleware_config_text(text, registry=registry)
 
     assert len(result) == 1
-    assert result[0].config == {"id": 1}
+    mw0 = result[0]
+    assert isinstance(mw0, DummyMiddleware)
+    assert mw0.config == {"id": 1}
 
 
-def test_dump_yaml_when_available() -> None:
+def test_load_yaml_path_when_available(tmp_path: Path) -> None:
     pytest.importorskip("yaml", reason="PyYAML not installed")
-    config = [{"type": "dummy", "config": {"id": 1}}]
-    result = dump_middleware_config(config, format="yaml")
+    registry = {"dummy": DummyMiddleware}
+    path = tmp_path / "pipeline.yaml"
+    path.write_text("- type: dummy\n  config:\n    id: 2\n", encoding="utf-8")
 
-    assert "type: dummy" in result
+    result = load_middleware_config_path(path, registry=registry)
 
-
-def test_save_yaml_path_when_available(tmp_path: Path) -> None:
-    pytest.importorskip("yaml", reason="PyYAML not installed")
-    config = [{"type": "dummy"}]
-    path = tmp_path / "pipeline.yml"
-
-    save_middleware_config_path(config, path)
-    assert path.read_text()
+    assert len(result) == 1
+    assert isinstance(result[0], DummyMiddleware)
+    assert result[0].config == {"id": 2}
 
 
 def test_invalid_json_raises() -> None:
@@ -139,39 +130,25 @@ def test_invalid_json_raises() -> None:
 
 def test_unknown_format_raises() -> None:
     with pytest.raises(MiddlewareConfigError, match="Unknown config format"):
-        dump_middleware_config([{"type": "dummy"}], format="toml")
-
-
-def test_save_unknown_extension_raises(tmp_path: Path) -> None:
-    path = tmp_path / "pipeline"
-    with pytest.raises(MiddlewareConfigError, match="Unable to determine config format"):
-        save_middleware_config_path([{"type": "dummy"}], path)
+        load_middleware_config_text("- type: dummy", registry={}, format="toml")
 
 
 def test_load_yaml_missing_dependency(monkeypatch: pytest.MonkeyPatch) -> None:
     registry = {"dummy": DummyMiddleware}
 
-    def fake_import(name: str, *args: Any, **kwargs: Any) -> Any:
-        if name == "yaml":
-            raise ImportError("No module named yaml")
-        return real_import(name, *args, **kwargs)
+    monkeypatch.setitem(sys.modules, "yaml", None)  # Simulates missing module
 
-    real_import = __import__
-    monkeypatch.setattr("builtins.__import__", fake_import)
     with pytest.raises(MiddlewareConfigError, match="YAML support requires PyYAML"):
         load_middleware_config_text("- type: dummy", registry=registry, format="yaml")
 
 
-def test_dump_yaml_missing_dependency(monkeypatch: pytest.MonkeyPatch) -> None:
-    def fake_import(name: str, *args: Any, **kwargs: Any) -> Any:
-        if name == "yaml":
-            raise ImportError("No module named yaml")
-        return real_import(name, *args, **kwargs)
+def test_detect_format_missing_inputs_raises() -> None:
+    with pytest.raises(MiddlewareConfigError, match="Unable to determine config format"):
+        _detect_format()
 
-    real_import = __import__
-    monkeypatch.setattr("builtins.__import__", fake_import)
-    with pytest.raises(MiddlewareConfigError, match="YAML support requires PyYAML"):
-        dump_middleware_config([{"type": "dummy"}], format="yaml")
+
+def test_detect_format_path_yaml() -> None:
+    assert _detect_format(path=Path("pipeline.yaml")) == "yaml"
 
 
 def test_builder_type_errors() -> None:
@@ -327,7 +304,7 @@ def test_builder_predicates() -> None:
         build_middleware(
             {"when": {"predicate": "always", "then": []}},
             registry=registry,
-            predicates={"always": object()},
+            predicates={"always": cast(Any, object())},
         )
 
     with pytest.raises(MiddlewareConfigError, match="Invalid predicate specification"):
@@ -356,11 +333,120 @@ def test_build_middleware_list_inputs() -> None:
     assert len(result) == 1
 
 
+def test_builder_class_api() -> None:
+    registry = {"dummy": DummyMiddleware}
+    reg = MiddlewareRegistry(middleware=registry)
+    compiler = MiddlewarePipelineCompiler(registry=reg)
+
+    result = compiler.compile({"type": "dummy", "config": {"id": 1}})
+    assert isinstance(result, DummyMiddleware)
+    assert result.config == {"id": 1}
+
+    items = compiler.compile_list([{"type": "dummy"}, {"type": "dummy"}])
+    assert len(items) == 2
+
+
+def test_registry_decorators_and_overwrite() -> None:
+    reg: MiddlewareRegistry[None] = MiddlewareRegistry()
+
+    @reg.middleware_factory()
+    def Dummy(**config: Any) -> DummyMiddleware:
+        return DummyMiddleware(**config)
+
+    assert "Dummy" in reg.middleware
+
+    @reg.predicate()
+    def always(ctx: Any) -> bool:
+        return True
+
+    assert "always" in reg.predicates
+
+    with pytest.raises(MiddlewareConfigError, match="already registered"):
+        reg.register_middleware("Dummy", Dummy, overwrite=False)
+
+    reg.register_middleware("Dummy", Dummy, overwrite=True)
+
+
+def test_compiler_ambiguous_spec_raises() -> None:
+    reg: MiddlewareRegistry[None] = MiddlewareRegistry(middleware={"dummy": DummyMiddleware})
+    compiler = MiddlewarePipelineCompiler(registry=reg)
+
+    with pytest.raises(MiddlewareConfigError, match="Ambiguous middleware spec"):
+        compiler.compile({"type": "dummy", "chain": []})
+
+
+def test_compiler_when_uses_registry_predicates() -> None:
+    reg: MiddlewareRegistry[None] = MiddlewareRegistry(middleware={"dummy": DummyMiddleware})
+
+    @reg.predicate("always_true")
+    def always_true(ctx: Any) -> bool:
+        return True
+
+    compiler = MiddlewarePipelineCompiler(registry=reg)
+    result = compiler.compile(
+        {
+            "when": {
+                "predicate": "always_true",
+                "then": [{"type": "dummy", "config": {"id": 1}}],
+                "else": [{"type": "dummy", "config": {"id": 2}}],
+            }
+        }
+    )
+
+    from pydantic_ai_middleware.conditional import ConditionalMiddleware
+
+    assert isinstance(result, ConditionalMiddleware)
+
+
+def test_registry_register_predicate_duplicate_raises() -> None:
+    reg: MiddlewareRegistry[None] = MiddlewareRegistry()
+
+    reg.register_predicate("p", lambda ctx: True)
+
+    with pytest.raises(MiddlewareConfigError, match="Predicate 'p' is already registered"):
+        reg.register_predicate("p", lambda ctx: False)
+
+
+def test_registry_predicate_decorator_requires_name() -> None:
+    reg: MiddlewareRegistry[None] = MiddlewareRegistry()
+
+    class CallablePredicate:
+        def __call__(self, ctx: Any) -> bool:
+            return True
+
+    decorator = reg.predicate()
+    with pytest.raises(MiddlewareConfigError, match="Predicate name is required for registration"):
+        decorator(CallablePredicate())
+
+
+def test_compiler_register_node_handler_duplicate_raises() -> None:
+    reg: MiddlewareRegistry[None] = MiddlewareRegistry(middleware={"dummy": DummyMiddleware})
+    compiler = MiddlewarePipelineCompiler(registry=reg)
+
+    def handler(_: MiddlewarePipelineCompiler[Any], __: dict[str, Any]) -> Any:
+        return DummyMiddleware()
+
+    with pytest.raises(
+        MiddlewareConfigError, match="Node handler for 'type' is already registered"
+    ):
+        compiler.register_node_handler("type", handler)
+
+
+def test_compiler_register_node_handler_overwrite_allows_replacement() -> None:
+    reg: MiddlewareRegistry[None] = MiddlewareRegistry(middleware={"dummy": DummyMiddleware})
+    compiler = MiddlewarePipelineCompiler(registry=reg)
+
+    def handler(_: MiddlewarePipelineCompiler[Any], __: dict[str, Any]) -> Any:
+        return DummyMiddleware()
+
+    compiler.register_node_handler("type", handler, overwrite=True)
+
+
 def test_register_helpers() -> None:
     from pydantic_ai_middleware.config_loaders import register_middleware, register_predicate
 
     registry: dict[str, Any] = {}
-    predicates: dict[str, Any] = {}
+    predicates: dict[str, Callable[[Any], bool]] = {}
 
     @register_middleware(registry)
     class Registered(DummyMiddleware):
@@ -392,58 +478,3 @@ def test_register_helpers() -> None:
 
     with pytest.raises(MiddlewareConfigError, match="Predicate name is required"):
         register_predicate(predicates, CallablePredicate(), name=None)
-
-
-def test_dump_invalid_nodes() -> None:
-    with pytest.raises(MiddlewareConfigError, match="parallel spec must be a mapping"):
-        dump_middleware_config({"parallel": "bad"}, format="json")
-
-    with pytest.raises(MiddlewareConfigError, match="when spec must be a mapping"):
-        dump_middleware_config({"when": "bad"}, format="json")
-
-    with pytest.raises(MiddlewareConfigError, match="chain must be a mapping or sequence"):
-        dump_middleware_config({"chain": 123}, format="json")
-
-    with pytest.raises(
-        MiddlewareConfigError, match="parallel.middleware must be a mapping or sequence"
-    ):
-        dump_middleware_config({"parallel": {"middleware": 123}}, format="json")
-
-    with pytest.raises(MiddlewareConfigError, match="when.then must be a mapping or sequence"):
-        dump_middleware_config({"when": {"then": 123}}, format="json")
-
-    with pytest.raises(MiddlewareConfigError, match="when.else must be a mapping or sequence"):
-        dump_middleware_config({"when": {"else": 123}}, format="json")
-
-    with pytest.raises(MiddlewareConfigError, match="Config must be a mapping or sequence"):
-        dump_middleware_config(123, format="json")  # type: ignore[arg-type]
-
-
-def test_dump_parallel_and_when_normalization() -> None:
-    config = {
-        "parallel": {"middleware": [{"type": "dummy"}]},
-        "when": {"then": [{"type": "dummy"}], "else": [{"type": "dummy"}]},
-    }
-    result = dump_middleware_config(config, format="json")
-    assert '"parallel"' in result
-    assert '"when"' in result
-
-
-def test_dump_parallel_without_middleware() -> None:
-    result = dump_middleware_config({"parallel": {}}, format="json")
-    assert '"parallel"' in result
-
-
-def test_dump_when_with_none_else() -> None:
-    result = dump_middleware_config({"when": {"then": [], "else": None}}, format="json")
-    assert '"when"' in result
-
-
-def test_dump_chain_list_normalization() -> None:
-    result = dump_middleware_config([{"chain": [{"type": "dummy"}]}], format="json")
-    assert '"chain"' in result
-
-
-def test_dump_chain_item_type_error() -> None:
-    with pytest.raises(MiddlewareConfigError, match="chain items must be mappings"):
-        dump_middleware_config({"chain": ["bad"]}, format="json")
