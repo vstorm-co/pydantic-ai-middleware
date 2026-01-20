@@ -9,11 +9,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Middleware Chains** - `MiddlewareChain` for grouping middleware into reusable, ordered units
+  - Fluent API: `add()`, `insert()`, `remove()`, `replace()`, `pop()`, `clear()`, `copy()`
+  - Chain composition: chains flatten when added to other chains
+  - Operator support: `+` and `+=` for combining chains
+  - Iteration support: `len()`, `[]`, `in`, iteration
 - **Conditional Middleware** - `ConditionalMiddleware` for branching execution based on runtime conditions
   - Route to different middleware based on predicate functions
   - Supports single middleware or middleware pipelines for each branch
   - Predicate receives `ScopedContext` for context-aware decisions
   - `when(condition, then, otherwise)` helper for fluent syntax
+- **Pipeline Spec Builder** - `PipelineSpec` for building middleware pipelines as portable config dictionaries
+  - Fluent builder API: `add_type()`, `add_chain()`, `add_parallel()`, `add_when()`
+  - Export to files: `dump(format="json"|"yaml")`, `save(path)` with auto-detection from extension
+  - Direct compilation: `compile(compiler)` delegates to compiler
+  - Helper functions: `type_node()`, `chain_node()`, `parallel_node()`, `when_node()`
+- **Config Loaders** - Functions to load middleware pipelines from JSON/YAML
+  - `load_middleware_config_text(text, registry, predicates)` - parse from string
+  - `load_middleware_config_path(path, registry, predicates)` - parse from file
+  - Auto-detection of format from file extension or content
+  - Registration helpers: `register_middleware()`, `register_predicate()` decorators
+- **Pipeline Compiler** - `MiddlewarePipelineCompiler` for compiling config dictionaries into middleware
+  - `MiddlewareRegistry` for storing middleware factories and predicates
+  - Built-in node handlers: `type`, `chain`, `parallel`, `when`
+  - Extensible via `register_node_handler()` for custom node types
+  - Convenience wrappers: `build_middleware()`, `build_middleware_list()`
 - **Context Sharing System** - Share data between middleware hooks with access control
   - `MiddlewareContext` class for managing shared state across hooks
   - `ScopedContext` class for enforcing access control based on hook execution order
@@ -36,6 +56,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `ParallelExecutionFailed` - When parallel execution fails
   - `GuardrailTimeout` - When guardrail times out
   - `AggregationFailed` - When result aggregation fails
+  - `MiddlewareConfigError` - When config loading or compilation fails
 
 ### Changed
 
