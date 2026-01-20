@@ -133,8 +133,8 @@ Combine middleware with chains, conditionals, and config loaders:
 from pydantic_ai_middleware import (
     ConditionalMiddleware,
     MiddlewareChain,
+    PipelineSpec,
     load_middleware_config_text,
-    save_middleware_config_path,
 )
 from pydantic_ai_middleware.context import HookType
 
@@ -155,11 +155,9 @@ config_text = """
 ]
 """
 middleware = load_middleware_config_text(config_text, registry=registry)
-config_data = [
-    {"type": "logging"},
-    {"parallel": {"middleware": [{"type": "pii"}, {"type": "profanity"}]}},
-]
-save_middleware_config_path(config_data, "pipeline.json")
+PipelineSpec().add_type("logging").add(
+    {"parallel": {"middleware": [{"type": "pii"}, {"type": "profanity"}]}}
+).save("pipeline.json")
 ```
 
 ## Async Guardrails

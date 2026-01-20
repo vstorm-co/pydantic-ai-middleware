@@ -92,11 +92,11 @@ middleware = load_middleware_config_text(
 )
 ```
 
-## Save with stable output
+## Export a spec as JSON/YAML
 
 ```python
-from pydantic_ai_middleware import save_middleware_config_path
+from pydantic_ai_middleware.pipeline_spec import PipelineSpec
 
-save_middleware_config_path(config_data, "pipeline.json")
-save_middleware_config_path(config_data, "pipeline.yaml")
+PipelineSpec().add_type("logging").save("pipeline.json")
+PipelineSpec().add_type("logging").save("pipeline.yaml")
 ```
