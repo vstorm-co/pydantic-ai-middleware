@@ -183,7 +183,19 @@ class ConditionalMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
         deps: DepsT | None,
         ctx: ScopedContext | None = None,
     ) -> str | Sequence[Any]:
-        """Execute selected middleware's before_run hook."""
+        """Execute selected middleware's before_run hook.
+
+        Evaluates the condition and routes to `when_true` or `when_false`
+        middleware pipeline accordingly.
+
+        Args:
+            prompt: The user prompt to process.
+            deps: The agent dependencies.
+            ctx: Scoped context for condition evaluation and data sharing.
+
+        Returns:
+            The (possibly modified) prompt from the selected middleware.
+        """
         middleware = self._select(ctx)
         if middleware:
             return await self._run_before(middleware, prompt, deps, ctx)
@@ -196,7 +208,20 @@ class ConditionalMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
         deps: DepsT | None,
         ctx: ScopedContext | None = None,
     ) -> Any:
-        """Execute selected middleware's after_run hook."""
+        """Execute selected middleware's after_run hook.
+
+        Evaluates the condition and routes to `when_true` or `when_false`
+        middleware pipeline accordingly. Middleware is executed in reverse order.
+
+        Args:
+            prompt: The original user prompt.
+            output: The agent output to process.
+            deps: The agent dependencies.
+            ctx: Scoped context for condition evaluation and data sharing.
+
+        Returns:
+            The (possibly modified) output from the selected middleware.
+        """
         middleware = self._select(ctx)
         if middleware:
             return await self._run_after(middleware, prompt, output, deps, ctx)
@@ -208,7 +233,19 @@ class ConditionalMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
         deps: DepsT | None,
         ctx: ScopedContext | None = None,
     ) -> list[ModelMessage]:
-        """Execute selected middleware's before_model_request hook."""
+        """Execute selected middleware's before_model_request hook.
+
+        Evaluates the condition and routes to `when_true` or `when_false`
+        middleware pipeline accordingly.
+
+        Args:
+            messages: The messages to send to the model.
+            deps: The agent dependencies.
+            ctx: Scoped context for condition evaluation and data sharing.
+
+        Returns:
+            The (possibly modified) messages from the selected middleware.
+        """
         middleware = self._select(ctx)
         if middleware:
             return await self._run_before_model_request(middleware, messages, deps, ctx)
@@ -221,7 +258,23 @@ class ConditionalMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
         deps: DepsT | None,
         ctx: ScopedContext | None = None,
     ) -> dict[str, Any]:
-        """Execute selected middleware's before_tool_call hook."""
+        """Execute selected middleware's before_tool_call hook.
+
+        Evaluates the condition and routes to `when_true` or `when_false`
+        middleware pipeline accordingly.
+
+        Args:
+            tool_name: The name of the tool being called.
+            tool_args: The arguments to the tool.
+            deps: The agent dependencies.
+            ctx: Scoped context for condition evaluation and data sharing.
+
+        Returns:
+            The (possibly modified) tool arguments from the selected middleware.
+
+        Raises:
+            ToolBlocked: If any selected middleware blocks the tool call.
+        """
         middleware = self._select(ctx)
         if middleware:
             return await self._run_before_tool_call(middleware, tool_name, tool_args, deps, ctx)
@@ -235,7 +288,21 @@ class ConditionalMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
         deps: DepsT | None,
         ctx: ScopedContext | None = None,
     ) -> Any:
-        """Execute selected middleware's after_tool_call hook."""
+        """Execute selected middleware's after_tool_call hook.
+
+        Evaluates the condition and routes to `when_true` or `when_false`
+        middleware pipeline accordingly. Middleware is executed in reverse order.
+
+        Args:
+            tool_name: The name of the tool that was called.
+            tool_args: The arguments that were passed to the tool.
+            result: The result from the tool.
+            deps: The agent dependencies.
+            ctx: Scoped context for condition evaluation and data sharing.
+
+        Returns:
+            The (possibly modified) result from the selected middleware.
+        """
         middleware = self._select(ctx)
         if middleware:
             return await self._run_after_tool_call(
@@ -249,7 +316,19 @@ class ConditionalMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
         deps: DepsT | None,
         ctx: ScopedContext | None = None,
     ) -> Exception | None:
-        """Execute selected middleware's on_error hook."""
+        """Execute selected middleware's on_error hook.
+
+        Evaluates the condition and routes to `when_true` or `when_false`
+        middleware pipeline accordingly.
+
+        Args:
+            error: The exception that occurred.
+            deps: The agent dependencies.
+            ctx: Scoped context for condition evaluation and data sharing.
+
+        Returns:
+            A different exception to raise, or None to re-raise the original.
+        """
         middleware = self._select(ctx)
         if middleware:
             return await self._run_on_error(middleware, error, deps, ctx)

@@ -93,6 +93,8 @@ nav:
     - api/index.md
     - api/middleware.md
     - api/chain.md
+    - api/conditional.md
+    - api/pipeline_spec.md
     - api/agent.md
     - api/toolset.md
     - api/decorators.md

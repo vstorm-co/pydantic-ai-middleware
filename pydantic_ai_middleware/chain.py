@@ -31,7 +31,30 @@ def _flatten(
 
 
 class MiddlewareChain(AgentMiddleware[DepsT], Generic[DepsT]):
-    """A composable, ordered chain of middleware."""
+    """A composable, ordered chain of middleware.
+
+    MiddlewareChain allows you to group multiple middleware into a reusable unit.
+    When used in an agent, hooks are executed in sequence: before_* hooks run
+    in order (first to last), while after_* hooks run in reverse order (last to first).
+
+    Chains can be nested - adding a chain to another chain flattens the middleware
+    into a single sequence.
+
+    Example:
+        ```python
+        # Create a chain for security middleware
+        security_chain = MiddlewareChain([
+            AuthMiddleware(),
+            RateLimitMiddleware(),
+        ], name="security")
+
+        # Use with an agent
+        agent = MiddlewareAgent(
+            agent=base_agent,
+            middleware=[security_chain, LoggingMiddleware()],
+        )
+        ```
+    """
 
     def __init__(
         self,
@@ -39,6 +62,14 @@ class MiddlewareChain(AgentMiddleware[DepsT], Generic[DepsT]):
         *,
         name: str | None = None,
     ) -> None:
+        """Initialize a middleware chain.
+
+        Args:
+            middleware: Sequence of middleware or chains to include.
+                Chains are flattened into their constituent middleware.
+            name: Optional name for the chain (useful for debugging/logging).
+                Defaults to "MiddlewareChain(N)" where N is the count.
+        """
         self._middleware = _flatten(middleware or [])
         self._name = name or f"MiddlewareChain({len(self._middleware)})"
 
@@ -55,7 +86,18 @@ class MiddlewareChain(AgentMiddleware[DepsT], Generic[DepsT]):
     def add(
         self, middleware: AgentMiddleware[DepsT] | MiddlewareChain[DepsT]
     ) -> MiddlewareChain[DepsT]:
-        """Append middleware to the chain."""
+        """Append middleware to the end of the chain.
+
+        Args:
+            middleware: Middleware or chain to append. If a chain is provided,
+                its middleware are flattened into this chain.
+
+        Returns:
+            Self for method chaining.
+
+        Raises:
+            TypeError: If middleware is not an AgentMiddleware or MiddlewareChain.
+        """
         if isinstance(middleware, MiddlewareChain):
             self._middleware.extend(middleware._middleware)
         elif isinstance(middleware, AgentMiddleware):
@@ -70,7 +112,19 @@ class MiddlewareChain(AgentMiddleware[DepsT], Generic[DepsT]):
     def insert(
         self, index: int, middleware: AgentMiddleware[DepsT] | MiddlewareChain[DepsT]
     ) -> MiddlewareChain[DepsT]:
-        """Insert middleware at a specific position."""
+        """Insert middleware at a specific position in the chain.
+
+        Args:
+            index: Position to insert at (0-based).
+            middleware: Middleware or chain to insert. If a chain is provided,
+                its middleware are flattened and inserted at the position.
+
+        Returns:
+            Self for method chaining.
+
+        Raises:
+            TypeError: If middleware is not an AgentMiddleware or MiddlewareChain.
+        """
         if isinstance(middleware, MiddlewareChain):
             self._middleware[index:index] = middleware._middleware
         elif isinstance(middleware, AgentMiddleware):
@@ -83,12 +137,32 @@ class MiddlewareChain(AgentMiddleware[DepsT], Generic[DepsT]):
         return self
 
     def remove(self, middleware: AgentMiddleware[DepsT]) -> MiddlewareChain[DepsT]:
-        """Remove middleware from the chain."""
+        """Remove a specific middleware from the chain.
+
+        Args:
+            middleware: The middleware instance to remove.
+
+        Returns:
+            Self for method chaining.
+
+        Raises:
+            ValueError: If middleware is not in the chain.
+        """
         self._middleware.remove(middleware)
         return self
 
     def pop(self, index: int = -1) -> AgentMiddleware[DepsT]:
-        """Remove and return middleware at index (default last)."""
+        """Remove and return middleware at the given index.
+
+        Args:
+            index: Position to pop from (default: -1, the last item).
+
+        Returns:
+            The removed middleware instance.
+
+        Raises:
+            IndexError: If the chain is empty or index is out of range.
+        """
         return self._middleware.pop(index)
 
     def replace(
@@ -96,7 +170,20 @@ class MiddlewareChain(AgentMiddleware[DepsT], Generic[DepsT]):
         old: AgentMiddleware[DepsT],
         new: AgentMiddleware[DepsT] | MiddlewareChain[DepsT],
     ) -> MiddlewareChain[DepsT]:
-        """Replace middleware with another middleware or chain."""
+        """Replace a middleware with another middleware or chain.
+
+        Args:
+            old: The middleware instance to replace.
+            new: Middleware or chain to replace with. If a chain is provided,
+                its middleware are flattened into the position.
+
+        Returns:
+            Self for method chaining.
+
+        Raises:
+            ValueError: If old middleware is not in the chain.
+            TypeError: If new is not an AgentMiddleware or MiddlewareChain.
+        """
         index = self._middleware.index(old)
         if isinstance(new, MiddlewareChain):
             self._middleware[index : index + 1] = new._middleware
@@ -110,12 +197,20 @@ class MiddlewareChain(AgentMiddleware[DepsT], Generic[DepsT]):
         return self
 
     def clear(self) -> MiddlewareChain[DepsT]:
-        """Remove all middleware from the chain."""
+        """Remove all middleware from the chain.
+
+        Returns:
+            Self for method chaining.
+        """
         self._middleware.clear()
         return self
 
     def copy(self) -> MiddlewareChain[DepsT]:
-        """Return a shallow copy of the chain."""
+        """Return a shallow copy of the chain.
+
+        Returns:
+            A new MiddlewareChain with the same middleware and name.
+        """
         return MiddlewareChain(self._middleware, name=self._name)
 
     def __add__(

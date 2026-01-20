@@ -1,6 +1,6 @@
 # Config Loading
 
-You can load and save middleware pipelines as JSON or YAML. This makes it easy to share
+You can load middleware pipelines as JSON or YAML. This makes it easy to share
 the same pipeline across environments without duplicating code.
 
 ## Supported nodes
