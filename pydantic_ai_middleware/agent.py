@@ -10,6 +10,7 @@ from typing import Any
 from pydantic_ai import messages as _messages
 from pydantic_ai import models
 from pydantic_ai import usage as _usage
+from pydantic_ai.agent import AgentMetadata
 from pydantic_ai.agent.abstract import AbstractAgent, EventStreamHandler, Instructions
 from pydantic_ai.builtin_tools import AbstractBuiltinTool
 from pydantic_ai.output import OutputDataT, OutputSpec
@@ -104,6 +105,7 @@ class MiddlewareAgent(AbstractAgent[AgentDepsT, OutputDataT]):
         model_settings: ModelSettings | None = None,
         usage_limits: _usage.UsageLimits | None = None,
         usage: _usage.RunUsage | None = None,
+        metadata: AgentMetadata[AgentDepsT] | None = None,
         infer_name: bool = True,
         toolsets: Sequence[AbstractToolset[AgentDepsT]] | None = None,
         builtin_tools: Sequence[AbstractBuiltinTool | BuiltinToolFunc[AgentDepsT]] | None = None,
@@ -122,6 +124,7 @@ class MiddlewareAgent(AbstractAgent[AgentDepsT, OutputDataT]):
             model_settings: Optional settings for the model request.
             usage_limits: Optional limits on model requests or tokens.
             usage: Optional usage to start with.
+            metadata: Optional metadata for the agent run.
             infer_name: Whether to infer agent name from call frame.
             toolsets: Optional additional toolsets for this run.
             builtin_tools: Optional additional builtin tools.
@@ -157,6 +160,7 @@ class MiddlewareAgent(AbstractAgent[AgentDepsT, OutputDataT]):
                 model_settings=model_settings,
                 usage_limits=usage_limits,
                 usage=usage,
+                metadata=metadata,
                 infer_name=infer_name,
                 toolsets=middleware_toolsets if middleware_toolsets else None,
                 builtin_tools=builtin_tools,
@@ -194,6 +198,7 @@ class MiddlewareAgent(AbstractAgent[AgentDepsT, OutputDataT]):
         model_settings: ModelSettings | None = None,
         usage_limits: _usage.UsageLimits | None = None,
         usage: _usage.RunUsage | None = None,
+        metadata: AgentMetadata[AgentDepsT] | None = None,
         infer_name: bool = True,
         toolsets: Sequence[AbstractToolset[AgentDepsT]] | None = None,
         builtin_tools: Sequence[AbstractBuiltinTool | BuiltinToolFunc[AgentDepsT]] | None = None,
@@ -224,6 +229,7 @@ class MiddlewareAgent(AbstractAgent[AgentDepsT, OutputDataT]):
             model_settings=model_settings,
             usage_limits=usage_limits,
             usage=usage,
+            metadata=metadata,
             infer_name=infer_name,
             toolsets=middleware_toolsets if middleware_toolsets else None,
             builtin_tools=builtin_tools,
