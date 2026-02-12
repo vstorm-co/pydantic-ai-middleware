@@ -563,6 +563,31 @@ class TestConditionalMiddlewareBeforeToolCall:
 
         assert calls == ["first", "second"]
 
+    async def test_before_tool_call_permission_result_short_circuit(self) -> None:
+        """Test that ToolPermissionResult short-circuits the middleware pipeline."""
+        from pydantic_ai_middleware.permissions import ToolDecision, ToolPermissionResult
+
+        class PermMW(AgentMiddleware[None]):
+            async def before_tool_call(
+                self,
+                tool_name: str,
+                tool_args: dict[str, Any],
+                deps: None,
+                ctx: ScopedContext | None = None,
+            ) -> Any:
+                return ToolPermissionResult(
+                    decision=ToolDecision.DENY, reason="blocked"
+                )
+
+        cond = ConditionalMiddleware(
+            condition=lambda ctx: True,
+            when_true=PermMW(),
+        )
+
+        result = await cond.before_tool_call("my_tool", {"arg": "value"}, None)
+        assert isinstance(result, ToolPermissionResult)
+        assert result.decision == ToolDecision.DENY
+
 
 class TestConditionalMiddlewareAfterToolCall:
     """Tests for ConditionalMiddleware.after_tool_call hook."""

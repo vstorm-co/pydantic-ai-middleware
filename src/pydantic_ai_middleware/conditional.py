@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from typing import Any, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 from pydantic_ai.messages import ModelMessage
 
 from .base import AgentMiddleware, DepsT
 from .context import ScopedContext
+
+if TYPE_CHECKING:
+    from .permissions import ToolPermissionResult
 
 CtxT = TypeVar("CtxT", bound=ScopedContext | None)
 """Type variable for condition predicate context."""
@@ -144,11 +147,17 @@ class ConditionalMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
         tool_args: dict[str, Any],
         deps: DepsT | None,
         ctx: ScopedContext | None,
-    ) -> dict[str, Any]:
-        result = tool_args
+    ) -> dict[str, Any] | ToolPermissionResult:
+        current_args: dict[str, Any] = tool_args
         for mw in middleware:
-            result = await mw.before_tool_call(tool_name, result, deps, ctx)
-        return result
+            if not mw._should_handle_tool(tool_name):
+                continue
+            result = await mw.before_tool_call(tool_name, current_args, deps, ctx)
+            if isinstance(result, dict):
+                current_args = result
+            else:
+                return result
+        return current_args
 
     async def _run_after_tool_call(
         self,
@@ -161,8 +170,27 @@ class ConditionalMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
     ) -> Any:
         output = result
         for mw in reversed(middleware):
+            if not mw._should_handle_tool(tool_name):
+                continue
             output = await mw.after_tool_call(tool_name, tool_args, output, deps, ctx)
         return output
+
+    async def _run_on_tool_error(
+        self,
+        middleware: Sequence[AgentMiddleware[DepsT]],
+        tool_name: str,
+        tool_args: dict[str, Any],
+        error: Exception,
+        deps: DepsT | None,
+        ctx: ScopedContext | None,
+    ) -> Exception | None:
+        for mw in middleware:
+            if not mw._should_handle_tool(tool_name):
+                continue
+            handled = await mw.on_tool_error(tool_name, tool_args, error, deps, ctx)
+            if handled is not None:
+                return handled
+        return None
 
     async def _run_on_error(
         self,
@@ -257,7 +285,7 @@ class ConditionalMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
         tool_args: dict[str, Any],
         deps: DepsT | None,
         ctx: ScopedContext | None = None,
-    ) -> dict[str, Any]:
+    ) -> dict[str, Any] | ToolPermissionResult:
         """Execute selected middleware's before_tool_call hook.
 
         Evaluates the condition and routes to `when_true` or `when_false`
@@ -309,6 +337,36 @@ class ConditionalMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
                 middleware, tool_name, tool_args, result, deps, ctx
             )
         return result
+
+    async def on_tool_error(
+        self,
+        tool_name: str,
+        tool_args: dict[str, Any],
+        error: Exception,
+        deps: DepsT | None,
+        ctx: ScopedContext | None = None,
+    ) -> Exception | None:
+        """Execute selected middleware's on_tool_error hook.
+
+        Evaluates the condition and routes to `when_true` or `when_false`
+        middleware pipeline accordingly.
+
+        Args:
+            tool_name: The name of the tool that failed.
+            tool_args: The arguments that were passed to the tool.
+            error: The exception raised by the tool.
+            deps: The agent dependencies.
+            ctx: Scoped context for condition evaluation and data sharing.
+
+        Returns:
+            A different exception to raise, or None to re-raise the original.
+        """
+        middleware = self._select(ctx)
+        if middleware:
+            return await self._run_on_tool_error(
+                middleware, tool_name, tool_args, error, deps, ctx
+            )
+        return None
 
     async def on_error(
         self,

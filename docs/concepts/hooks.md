@@ -9,7 +9,8 @@ pydantic-ai-middleware provides hooks at various points in the agent execution l
 | `before_run` | Before agent starts | Prompt | Yes (`InputBlocked`) |
 | `after_run` | After agent finishes | Output | Yes (`OutputBlocked`) |
 | `before_model_request` | Before each model call | Messages | No |
-| `before_tool_call` | Before tool execution | Tool arguments | Yes (`ToolBlocked`) |
+| `before_tool_call` | Before tool execution | Tool arguments | Yes (`ToolBlocked` / `ToolPermissionResult`) |
+| `on_tool_error` | When a tool raises | Exception | Can replace |
 | `after_tool_call` | After tool execution | Tool result | No |
 | `on_error` | When error occurs | Exception | Can convert |
 
@@ -20,9 +21,10 @@ Hooks execute in a specific order, which matters for context sharing:
 1. **BEFORE_RUN** (1) - Initial input processing
 2. **BEFORE_MODEL_REQUEST** (2) - Before sending to model
 3. **BEFORE_TOOL_CALL** (3) - Before tool execution
-4. **AFTER_TOOL_CALL** (4) - After tool execution
-5. **AFTER_RUN** (5) - Final output processing
-6. **ON_ERROR** (6) - Error handling (can read all hooks)
+4. **ON_TOOL_ERROR** (4) - When a tool raises an exception (can read all hooks)
+5. **AFTER_TOOL_CALL** (5) - After tool execution
+6. **AFTER_RUN** (6) - Final output processing
+7. **ON_ERROR** (7) - Error handling (can read all hooks)
 
 ## Context Parameter
 
@@ -90,7 +92,7 @@ async def before_model_request(
 
 ## before_tool_call
 
-Called before a tool is executed. Can modify arguments or block.
+Called before a tool is executed. Can modify arguments, block, or return a structured permission decision.
 
 ```python
 async def before_tool_call(
@@ -99,9 +101,27 @@ async def before_tool_call(
     tool_args: dict[str, Any],
     deps: DepsT | None,
     ctx: ScopedContext | None = None,
-) -> dict[str, Any]:
-    # Return modified arguments
+) -> dict[str, Any] | ToolPermissionResult:
+    # Return modified arguments (dict) or ToolPermissionResult
     return tool_args
+```
+
+## on_tool_error
+
+Called when a tool raises an exception. Can replace the exception or return `None` to re-raise.
+
+```python
+async def on_tool_error(
+    self,
+    tool_name: str,
+    tool_args: dict[str, Any],
+    error: Exception,
+    deps: DepsT | None,
+    ctx: ScopedContext | None = None,
+) -> Exception | None:
+    # Return None to re-raise original
+    # Return exception to raise different one
+    return None
 ```
 
 ## after_tool_call
@@ -161,7 +181,7 @@ async def after_run(self, prompt, output, deps, ctx: ScopedContext | None = None
         # Read from BEFORE_RUN namespace
         user_id = ctx.get_from(HookType.BEFORE_RUN, "user_id")
         timestamp = ctx.get_from(HookType.BEFORE_RUN, "timestamp")
-        
+
         elapsed = time.time() - timestamp
         print(f"User {user_id} request took {elapsed:.2f}s")
     return output

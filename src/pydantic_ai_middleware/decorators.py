@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Sequence
-from typing import Any, TypeVar
+from typing import Any, TypeVar, overload
 
 from pydantic_ai.messages import ModelMessage
 
@@ -33,6 +33,10 @@ AfterToolCallFunc = Callable[
     [str, dict[str, Any], Any, DepsT | None, ScopedContext | None],
     Awaitable[Any],
 ]
+OnToolErrorFunc = Callable[
+    [str, dict[str, Any], Exception, DepsT | None, ScopedContext | None],
+    Awaitable[Exception | None],
+]
 OnErrorFunc = Callable[
     [Exception, DepsT | None, ScopedContext | None],
     Awaitable[Exception | None],
@@ -50,14 +54,19 @@ class _FunctionMiddleware(AgentMiddleware[DepsT]):
         before_model_request_func: BeforeModelRequestFunc[DepsT] | None = None,
         before_tool_call_func: BeforeToolCallFunc[DepsT] | None = None,
         after_tool_call_func: AfterToolCallFunc[DepsT] | None = None,
+        on_tool_error_func: OnToolErrorFunc[DepsT] | None = None,
         on_error_func: OnErrorFunc[DepsT] | None = None,
+        tool_names: set[str] | None = None,
     ) -> None:
         self._before_run_func = before_run_func
         self._after_run_func = after_run_func
         self._before_model_request_func = before_model_request_func
         self._before_tool_call_func = before_tool_call_func
         self._after_tool_call_func = after_tool_call_func
+        self._on_tool_error_func = on_tool_error_func
         self._on_error_func = on_error_func
+        if tool_names is not None:
+            self.tool_names = tool_names
 
     async def before_run(
         self,
@@ -100,6 +109,18 @@ class _FunctionMiddleware(AgentMiddleware[DepsT]):
         if self._before_tool_call_func is not None:
             return await self._before_tool_call_func(tool_name, tool_args, deps, ctx)
         return tool_args
+
+    async def on_tool_error(
+        self,
+        tool_name: str,
+        tool_args: dict[str, Any],
+        error: Exception,
+        deps: DepsT | None,
+        ctx: ScopedContext | None = None,
+    ) -> Exception | None:
+        if self._on_tool_error_func is not None:
+            return await self._on_tool_error_func(tool_name, tool_args, error, deps, ctx)
+        return None
 
     async def after_tool_call(
         self,
@@ -173,37 +194,135 @@ def before_model_request(
     return _FunctionMiddleware(before_model_request_func=func)
 
 
+@overload
 def before_tool_call(
     func: BeforeToolCallFunc[DepsT],
-) -> AgentMiddleware[DepsT]:
+) -> AgentMiddleware[DepsT]: ...
+
+
+@overload
+def before_tool_call(
+    func: None = None,
+    *,
+    tools: set[str] | None = ...,
+) -> Callable[[BeforeToolCallFunc[DepsT]], AgentMiddleware[DepsT]]: ...
+
+
+def before_tool_call(
+    func: BeforeToolCallFunc[DepsT] | None = None,
+    *,
+    tools: set[str] | None = None,
+) -> AgentMiddleware[DepsT] | Callable[[BeforeToolCallFunc[DepsT]], AgentMiddleware[DepsT]]:
     """Create middleware from a before_tool_call function.
+
+    Can be used as a plain decorator or with `tools` parameter:
 
     Example:
         ```python
         @before_tool_call
-        async def validate_tool(tool_name: str, tool_args: dict, deps, ctx) -> dict:
-            if tool_name == "dangerous_tool":
-                raise ToolBlocked(tool_name, "Not allowed")
+        async def validate_all(tool_name, tool_args, deps, ctx):
+            return tool_args
+
+        @before_tool_call(tools={"send_email"})
+        async def validate_email(tool_name, tool_args, deps, ctx):
             return tool_args
         ```
     """
-    return _FunctionMiddleware(before_tool_call_func=func)
+    if func is not None:
+        # Used as @before_tool_call (no parentheses)
+        return _FunctionMiddleware(before_tool_call_func=func, tool_names=tools)
+
+    # Used as @before_tool_call(tools={"send_email"})
+    def decorator(f: BeforeToolCallFunc[DepsT]) -> AgentMiddleware[DepsT]:
+        return _FunctionMiddleware(before_tool_call_func=f, tool_names=tools)
+
+    return decorator
+
+
+@overload
+def after_tool_call(
+    func: AfterToolCallFunc[DepsT],
+) -> AgentMiddleware[DepsT]: ...
+
+
+@overload
+def after_tool_call(
+    func: None = None,
+    *,
+    tools: set[str] | None = ...,
+) -> Callable[[AfterToolCallFunc[DepsT]], AgentMiddleware[DepsT]]: ...
 
 
 def after_tool_call(
-    func: AfterToolCallFunc[DepsT],
-) -> AgentMiddleware[DepsT]:
+    func: AfterToolCallFunc[DepsT] | None = None,
+    *,
+    tools: set[str] | None = None,
+) -> AgentMiddleware[DepsT] | Callable[[AfterToolCallFunc[DepsT]], AgentMiddleware[DepsT]]:
     """Create middleware from an after_tool_call function.
+
+    Can be used as a plain decorator or with `tools` parameter:
 
     Example:
         ```python
         @after_tool_call
-        async def log_tool_result(tool_name: str, tool_args: dict, result, deps, ctx):
-            print(f"Tool {tool_name} returned: {result}")
+        async def log_all(tool_name, tool_args, result, deps, ctx):
+            return result
+
+        @after_tool_call(tools={"send_email"})
+        async def log_email(tool_name, tool_args, result, deps, ctx):
             return result
         ```
     """
-    return _FunctionMiddleware(after_tool_call_func=func)
+    if func is not None:
+        return _FunctionMiddleware(after_tool_call_func=func, tool_names=tools)
+
+    def decorator(f: AfterToolCallFunc[DepsT]) -> AgentMiddleware[DepsT]:
+        return _FunctionMiddleware(after_tool_call_func=f, tool_names=tools)
+
+    return decorator
+
+
+@overload
+def on_tool_error(
+    func: OnToolErrorFunc[DepsT],
+) -> AgentMiddleware[DepsT]: ...
+
+
+@overload
+def on_tool_error(
+    func: None = None,
+    *,
+    tools: set[str] | None = ...,
+) -> Callable[[OnToolErrorFunc[DepsT]], AgentMiddleware[DepsT]]: ...
+
+
+def on_tool_error(
+    func: OnToolErrorFunc[DepsT] | None = None,
+    *,
+    tools: set[str] | None = None,
+) -> AgentMiddleware[DepsT] | Callable[[OnToolErrorFunc[DepsT]], AgentMiddleware[DepsT]]:
+    """Create middleware from an on_tool_error function.
+
+    Can be used as a plain decorator or with `tools` parameter:
+
+    Example:
+        ```python
+        @on_tool_error
+        async def handle_all_errors(tool_name, tool_args, error, deps, ctx):
+            return None  # Re-raise original
+
+        @on_tool_error(tools={"send_email"})
+        async def handle_email_errors(tool_name, tool_args, error, deps, ctx):
+            return RuntimeError("Email failed")
+        ```
+    """
+    if func is not None:
+        return _FunctionMiddleware(on_tool_error_func=func, tool_names=tools)
+
+    def decorator(f: OnToolErrorFunc[DepsT]) -> AgentMiddleware[DepsT]:
+        return _FunctionMiddleware(on_tool_error_func=f, tool_names=tools)
+
+    return decorator
 
 
 def on_error(

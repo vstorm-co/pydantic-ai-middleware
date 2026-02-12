@@ -15,6 +15,7 @@ from .strategies import GuardrailTiming
 
 if TYPE_CHECKING:
     from .context import ScopedContext
+    from .permissions import ToolPermissionResult
 
 logger = logging.getLogger(__name__)
 
@@ -247,7 +248,7 @@ class AsyncGuardrailMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
         tool_args: dict[str, Any],
         deps: DepsT | None,
         ctx: ScopedContext | None = None,
-    ) -> dict[str, Any]:
+    ) -> dict[str, Any] | ToolPermissionResult:
         """Pass through to wrapped guardrail for BLOCKING mode only.
 
         Args:
@@ -257,7 +258,7 @@ class AsyncGuardrailMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
             ctx: Scoped context for data sharing.
 
         Returns:
-            The (possibly modified) tool arguments.
+            The (possibly modified) tool arguments or a ToolPermissionResult.
         """
         if self.timing == GuardrailTiming.BLOCKING:
             return await self.guardrail.before_tool_call(tool_name, tool_args, deps, ctx)
@@ -286,6 +287,32 @@ class AsyncGuardrailMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
         if self.timing == GuardrailTiming.BLOCKING:
             return await self.guardrail.after_tool_call(tool_name, tool_args, result, deps, ctx)
         return result
+
+    async def on_tool_error(
+        self,
+        tool_name: str,
+        tool_args: dict[str, Any],
+        error: Exception,
+        deps: DepsT | None,
+        ctx: ScopedContext | None = None,
+    ) -> Exception | None:
+        """Pass through to wrapped guardrail.
+
+        Args:
+            tool_name: The name of the tool that failed.
+            tool_args: The arguments that were passed to the tool.
+            error: The exception raised by the tool.
+            deps: The agent dependencies.
+            ctx: Scoped context for data sharing.
+
+        Returns:
+            A different exception to raise, or None to re-raise the original.
+        """
+        if self.timing == GuardrailTiming.BLOCKING:
+            return await self.guardrail.on_tool_error(
+                tool_name, tool_args, error, deps, ctx
+            )
+        return None
 
     async def on_error(
         self,

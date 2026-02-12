@@ -37,6 +37,7 @@ from .decorators import (
     before_run,
     before_tool_call,
     on_error,
+    on_tool_error,
 )
 from .exceptions import (
     AggregationFailed,
@@ -44,16 +45,23 @@ from .exceptions import (
     InputBlocked,
     MiddlewareConfigError,
     MiddlewareError,
+    MiddlewareTimeout,
     OutputBlocked,
     ParallelExecutionFailed,
     ToolBlocked,
 )
 from .parallel import ParallelMiddleware
+from .permissions import PermissionHandler, ToolDecision, ToolPermissionResult
 from .pipeline_spec import PipelineSpec
 from .strategies import AggregationStrategy, GuardrailTiming
 from .toolset import MiddlewareToolset
 
-__version__ = "0.1.0"
+try:
+    from importlib.metadata import version as _metadata_version
+
+    __version__ = _metadata_version("pydantic-ai-middleware")
+except Exception:  # pragma: no cover
+    __version__ = "0.0.0"
 
 __all__ = [
     # Core classes
@@ -83,16 +91,22 @@ __all__ = [
     "ConditionalMiddleware",
     "AggregationStrategy",
     "GuardrailTiming",
+    # Permissions
+    "ToolDecision",
+    "ToolPermissionResult",
+    "PermissionHandler",
     # Decorators
     "before_run",
     "after_run",
     "before_model_request",
     "before_tool_call",
     "after_tool_call",
+    "on_tool_error",
     "on_error",
     # Exceptions
     "MiddlewareError",
     "MiddlewareConfigError",
+    "MiddlewareTimeout",
     "InputBlocked",
     "ToolBlocked",
     "OutputBlocked",

@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Iterator, Sequence
-from typing import Any, Generic, TypeVar, overload
+from typing import TYPE_CHECKING, Any, Generic, TypeVar, overload
 
 from pydantic_ai.messages import ModelMessage
 
 from .base import AgentMiddleware
 from .context import ScopedContext
+
+if TYPE_CHECKING:
+    from .permissions import ToolPermissionResult
 
 DepsT = TypeVar("DepsT")
 
@@ -302,11 +305,34 @@ class MiddlewareChain(AgentMiddleware[DepsT], Generic[DepsT]):
         tool_args: dict[str, Any],
         deps: DepsT | None,
         ctx: ScopedContext | None = None,
-    ) -> dict[str, Any]:
-        current_args = tool_args
+    ) -> dict[str, Any] | ToolPermissionResult:
+        current_args: dict[str, Any] = tool_args
         for mw in self._middleware:
-            current_args = await mw.before_tool_call(tool_name, current_args, deps, ctx)
+            if not mw._should_handle_tool(tool_name):
+                continue
+            result = await mw.before_tool_call(tool_name, current_args, deps, ctx)
+            if isinstance(result, dict):
+                current_args = result
+            else:
+                # ToolPermissionResult - short-circuit the chain
+                return result
         return current_args
+
+    async def on_tool_error(
+        self,
+        tool_name: str,
+        tool_args: dict[str, Any],
+        error: Exception,
+        deps: DepsT | None,
+        ctx: ScopedContext | None = None,
+    ) -> Exception | None:
+        for mw in self._middleware:
+            if not mw._should_handle_tool(tool_name):
+                continue
+            handled = await mw.on_tool_error(tool_name, tool_args, error, deps, ctx)
+            if handled is not None:
+                return handled
+        return None
 
     async def after_tool_call(
         self,
@@ -318,6 +344,8 @@ class MiddlewareChain(AgentMiddleware[DepsT], Generic[DepsT]):
     ) -> Any:
         current_result = result
         for mw in reversed(self._middleware):
+            if not mw._should_handle_tool(tool_name):
+                continue
             current_result = await mw.after_tool_call(
                 tool_name, tool_args, current_result, deps, ctx
             )

@@ -407,6 +407,7 @@ class TestContextReset:
             HookType.BEFORE_RUN,
             HookType.BEFORE_MODEL_REQUEST,
             HookType.BEFORE_TOOL_CALL,
+            HookType.ON_TOOL_ERROR,
             HookType.AFTER_TOOL_CALL,
             HookType.AFTER_RUN,
             HookType.ON_ERROR,

@@ -41,7 +41,7 @@ typecheck-pyright:
 
 .PHONY: typecheck-mypy
 typecheck-mypy:
-	uv run mypy pydantic_ai_middleware tests
+	uv run mypy src/pydantic_ai_middleware tests
 
 .PHONY: typecheck
 typecheck: typecheck-pyright ## Run static type checking

@@ -1,6 +1,6 @@
 # Config Loading
 
-You can load middleware pipelines as JSON or YAML. This makes it easy to share
+You can load middleware pipelines from JSON or YAML. This makes it easy to share
 the same pipeline across environments without duplicating code.
 
 ## Supported nodes
@@ -92,11 +92,7 @@ middleware = load_middleware_config_text(
 )
 ```
 
-## Export a spec as JSON/YAML
+## Next Steps
 
-```python
-from pydantic_ai_middleware.pipeline_spec import PipelineSpec
-
-PipelineSpec().add_type("logging").save("pipeline.json")
-PipelineSpec().add_type("logging").save("pipeline.yaml")
-```
+- [Pipeline Spec](pipeline-spec.md) - Build and export pipeline specs
+- [Conditional Routing](conditional-middleware.md) - Runtime branching

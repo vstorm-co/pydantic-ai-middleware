@@ -24,8 +24,10 @@ from pydantic_ai.tools import (
 )
 from pydantic_ai.toolsets import AbstractToolset
 
+from ._timeout import call_with_timeout
 from .base import AgentMiddleware
 from .context import HookType, MiddlewareContext
+from .permissions import PermissionHandler
 from .toolset import MiddlewareToolset
 
 
@@ -41,6 +43,7 @@ class MiddlewareAgent(AbstractAgent[AgentDepsT, OutputDataT]):
         agent: AbstractAgent[AgentDepsT, OutputDataT],
         middleware: list[AgentMiddleware[AgentDepsT]] | None = None,
         context: MiddlewareContext | None = None,
+        permission_handler: PermissionHandler | None = None,
     ) -> None:
         """Initialize the middleware agent.
 
@@ -49,10 +52,14 @@ class MiddlewareAgent(AbstractAgent[AgentDepsT, OutputDataT]):
             middleware: List of middleware to apply.
             context: MiddlewareContext instance for sharing data
                      between hooks. If not provided, context features are disabled.
+            permission_handler: Callback for handling ASK permission decisions
+                     from before_tool_call. Called with (tool_name, tool_args, reason)
+                     and should return True to allow or False to deny.
         """
         self._wrapped = agent
         self._middleware = middleware or []
         self._context = context
+        self._permission_handler = permission_handler
 
     @property
     def wrapped(self) -> AbstractAgent[AgentDepsT, OutputDataT]:
@@ -152,12 +159,18 @@ class MiddlewareAgent(AbstractAgent[AgentDepsT, OutputDataT]):
             ctx = None
 
         try:
-            # Apply before_run middleware
+            # Apply before_run middleware (with timeout)
             current_prompt: str | Sequence[Any] | None = user_prompt
             before_run_ctx = ctx.for_hook(HookType.BEFORE_RUN) if ctx else None
             for mw in self._middleware:
                 if current_prompt is not None:
-                    current_prompt = await mw.before_run(current_prompt, deps, before_run_ctx)
+                    mw_name = type(mw).__name__
+                    current_prompt = await call_with_timeout(
+                        mw.before_run(current_prompt, deps, before_run_ctx),
+                        mw.timeout,
+                        mw_name,
+                        "before_run",
+                    )
 
             # Store transformed prompt in metadata
             if ctx:
@@ -168,7 +181,12 @@ class MiddlewareAgent(AbstractAgent[AgentDepsT, OutputDataT]):
             if toolsets:
                 for ts in toolsets:
                     middleware_toolsets.append(
-                        MiddlewareToolset(wrapped=ts, middleware=self._middleware, ctx=ctx)
+                        MiddlewareToolset(
+                            wrapped=ts,
+                            middleware=self._middleware,
+                            ctx=ctx,
+                            permission_handler=self._permission_handler,
+                        )
                     )
 
             # Run the wrapped agent
@@ -189,12 +207,18 @@ class MiddlewareAgent(AbstractAgent[AgentDepsT, OutputDataT]):
                 event_stream_handler=event_stream_handler,
             )
 
-            # Apply after_run middleware (in reverse order)
+            # Apply after_run middleware (in reverse order, with timeout)
             output = result.output
             after_run_ctx = ctx.for_hook(HookType.AFTER_RUN) if ctx else None
             for mw in reversed(self._middleware):
                 if current_prompt is not None:
-                    output = await mw.after_run(current_prompt, output, deps, after_run_ctx)
+                    mw_name = type(mw).__name__
+                    output = await call_with_timeout(
+                        mw.after_run(current_prompt, output, deps, after_run_ctx),
+                        mw.timeout,
+                        mw_name,
+                        "after_run",
+                    )
 
             # Store final output in metadata
             if ctx:
@@ -204,10 +228,16 @@ class MiddlewareAgent(AbstractAgent[AgentDepsT, OutputDataT]):
             return _create_result_with_output(result, output)
 
         except Exception as e:
-            # Apply on_error middleware
+            # Apply on_error middleware (with timeout)
             on_error_ctx = ctx.for_hook(HookType.ON_ERROR) if ctx else None
             for mw in self._middleware:
-                handled = await mw.on_error(e, deps, on_error_ctx)
+                mw_name = type(mw).__name__
+                handled = await call_with_timeout(
+                    mw.on_error(e, deps, on_error_ctx),
+                    mw.timeout,
+                    mw_name,
+                    "on_error",
+                )
                 if handled is not None:
                     raise handled from e
             raise
@@ -241,12 +271,18 @@ class MiddlewareAgent(AbstractAgent[AgentDepsT, OutputDataT]):
         else:
             ctx = None
 
-        # Apply before_run middleware
+        # Apply before_run middleware (with timeout)
         current_prompt: str | Sequence[Any] | None = user_prompt
         before_run_ctx = ctx.for_hook(HookType.BEFORE_RUN) if ctx else None
         for mw in self._middleware:
             if current_prompt is not None:
-                current_prompt = await mw.before_run(current_prompt, deps, before_run_ctx)
+                mw_name = type(mw).__name__
+                current_prompt = await call_with_timeout(
+                    mw.before_run(current_prompt, deps, before_run_ctx),
+                    mw.timeout,
+                    mw_name,
+                    "before_run",
+                )
 
         # Store transformed prompt in metadata
         if ctx:
@@ -257,7 +293,12 @@ class MiddlewareAgent(AbstractAgent[AgentDepsT, OutputDataT]):
         if toolsets:
             for ts in toolsets:
                 middleware_toolsets.append(
-                    MiddlewareToolset(wrapped=ts, middleware=self._middleware, ctx=ctx)
+                    MiddlewareToolset(
+                        wrapped=ts,
+                        middleware=self._middleware,
+                        ctx=ctx,
+                        permission_handler=self._permission_handler,
+                    )
                 )
 
         async with self._wrapped.iter(

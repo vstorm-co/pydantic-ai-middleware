@@ -35,15 +35,25 @@ input_chain = MiddlewareChain(
 base_agent = Agent(model=TestModel())
 agent = MiddlewareAgent(
     agent=base_agent,
-    middleware=[
-        input_chain,
-    ],
+    middleware=[input_chain],
 )
 
 result = await agent.run("  Hello WORLD  ")
 ```
 
-## Example: chain of chains
+## Combining chains with `+`
+
+```python
+from pydantic_ai_middleware import MiddlewareChain
+
+security = MiddlewareChain([AuthMiddleware(), RateLimitMiddleware()], name="Security")
+logging = MiddlewareChain([RequestLog(), ResponseLog()], name="Logging")
+
+# Combine with + operator
+full_pipeline = security + logging
+```
+
+## Chain of chains
 
 ```python
 from pydantic_ai_middleware import MiddlewareChain
@@ -60,3 +70,9 @@ pipeline = MiddlewareChain([logging, security], name="FullPipeline")
 - `after_*` hooks run right-to-left in the chain.
 
 Nested chains are flattened in order, so the guarantees remain predictable.
+
+## Next Steps
+
+- [Parallel Execution](parallel-execution.md) - Run middleware concurrently
+- [Conditional Routing](conditional-middleware.md) - Branch based on conditions
+- [API Reference](../api/chain.md) - MiddlewareChain API

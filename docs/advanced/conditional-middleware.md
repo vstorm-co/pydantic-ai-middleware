@@ -56,3 +56,9 @@ middleware = ConditionalMiddleware(
     # No when_false - just pass through when condition is False
 )
 ```
+
+## Next Steps
+
+- [Middleware Chains](middleware-chains.md) - Sequential composition
+- [Config Loading](config-loading.md) - Load pipelines from config files
+- [API Reference](../api/conditional.md) - ConditionalMiddleware API

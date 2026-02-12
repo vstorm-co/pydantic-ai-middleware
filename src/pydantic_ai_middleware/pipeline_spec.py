@@ -277,7 +277,7 @@ def _dump_yaml(data: Any) -> str:
         import yaml  # type: ignore[import-untyped]
     except ImportError as exc:
         raise MiddlewareConfigError("YAML support requires PyYAML") from exc
-    return yaml.safe_dump(data, sort_keys=True)
+    return str(yaml.safe_dump(data, sort_keys=True))
 
 
 def _detect_format(*, format: str | None, path: Path | None) -> str:
