@@ -23,7 +23,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "pydantic-ai-slim>=1.38",
+    "pydantic-ai>=1.39",
     "pydantic>=2.0",
 ]
 

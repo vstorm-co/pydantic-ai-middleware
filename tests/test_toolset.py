@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import pytest
-from pydantic_ai._run_context import RunContext
+from pydantic_ai import RunContext
 from pydantic_ai.toolsets.abstract import AbstractToolset, ToolsetTool
 
 from pydantic_ai_middleware import (
