@@ -23,9 +23,10 @@ class HookType(IntEnum):
     BEFORE_RUN = 1
     BEFORE_MODEL_REQUEST = 2
     BEFORE_TOOL_CALL = 3
-    AFTER_TOOL_CALL = 4
-    AFTER_RUN = 5
-    ON_ERROR = 6  # Special: can read all
+    ON_TOOL_ERROR = 4
+    AFTER_TOOL_CALL = 5
+    AFTER_RUN = 6
+    ON_ERROR = 7  # Special: can read all
 
 
 class ContextAccessError(Exception):
@@ -69,8 +70,8 @@ class ScopedContext:
 
     def _can_read(self, hook: HookType) -> bool:
         """Check if current hook can read from the specified hook."""
-        # ON_ERROR can read everything
-        if self._current_hook == HookType.ON_ERROR:
+        # ON_ERROR and ON_TOOL_ERROR can read everything
+        if self._current_hook in (HookType.ON_ERROR, HookType.ON_TOOL_ERROR):
             return True
         # Can read from hooks earlier or equal in the chain
         return hook <= self._current_hook

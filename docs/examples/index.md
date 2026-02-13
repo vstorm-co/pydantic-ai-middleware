@@ -2,13 +2,24 @@
 
 Real-world examples of using pydantic-ai-middleware.
 
-## Quick Links
+## Getting Started
 
-- [Logging](logging.md) - Log agent activity
-- [Security](security.md) - Implement security checks
-- [Rate Limiting](rate-limiting.md) - Control request frequency
+| Example | Description |
+|---------|-------------|
+| [Logging](logging.md) | Log agent activity with before/after hooks |
+| [Rate Limiting](rate-limiting.md) | Control request frequency with sliding window |
 
-## Basic Example
+## Security
+
+| Example | Description |
+|---------|-------------|
+| [Security](security.md) | Input validation, tool authorization, PII redaction |
+| [PII Detection](pii-detection.md) | Detect and redact personally identifiable information |
+| [Prompt Injection](prompt-injection.md) | Screen prompts for injection techniques |
+| [Toxicity Check](toxicity-check.md) | Screen content for toxic or offensive language |
+| [JSON Schema Validation](json-schema-validation.md) | Validate tool arguments against JSON schemas |
+
+## Quick Example
 
 ```python
 from pydantic_ai import Agent
@@ -48,3 +59,14 @@ agent = MiddlewareAgent(
 ```
 
 Each middleware handles a specific concern, keeping your code clean and modular.
+
+## Runnable Examples
+
+The `examples/` directory contains standalone scripts you can run directly:
+
+```bash
+uv run python examples/pii_detection.py
+uv run python examples/prompt_injection.py
+uv run python examples/toxicity_check.py
+uv run python examples/json_schema_validation.py
+```

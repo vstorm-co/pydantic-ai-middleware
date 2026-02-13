@@ -55,6 +55,23 @@ agent = MiddlewareAgent(
 
 This is similar to how ASGI/WSGI middleware works.
 
+## Composing with MiddlewareChain
+
+Group related middleware into reusable chains:
+
+```python
+from pydantic_ai_middleware import MiddlewareChain
+
+validation = MiddlewareChain([mw1, mw2], name="Validation")
+
+agent = MiddlewareAgent(
+    agent=base_agent,
+    middleware=[validation, mw3],
+)
+```
+
+Chains can be nested and are flattened in order so execution stays predictable.
+
 ## Modifying Data
 
 Middleware can modify data at each stage:

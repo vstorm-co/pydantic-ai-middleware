@@ -1,41 +1,75 @@
-site_name: pydantic-ai-middleware
-site_description: Simple middleware library for Pydantic-AI
+site_name: Pydantic AI Middleware
+site_description: Simple middleware library for Pydantic AI - clean before/after hooks
 site_url: https://vstorm-co.github.io/pydantic-ai-middleware/
 repo_url: https://github.com/vstorm-co/pydantic-ai-middleware
 repo_name: vstorm-co/pydantic-ai-middleware
 
 theme:
   name: material
+  custom_dir: docs/overrides
   palette:
-    - scheme: slate
-      primary: deep purple
-      accent: deep purple
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: pink
+      accent: pink
       toggle:
         icon: material/brightness-4
         name: Switch to light mode
-    - scheme: default
-      primary: deep purple
-      accent: deep purple
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: pink
+      accent: pink
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode
   font:
-    text: Roboto
-    code: Roboto Mono
+    text: Inter
+    code: JetBrains Mono
+  icon:
+    repo: fontawesome/brands/github
+    admonition:
+      note: octicons/tag-16
+      abstract: octicons/checklist-16
+      info: octicons/info-16
+      tip: octicons/squirrel-16
+      success: octicons/check-16
+      question: octicons/question-16
+      warning: octicons/alert-16
+      failure: octicons/x-circle-16
+      danger: octicons/zap-16
+      bug: octicons/bug-16
+      example: octicons/beaker-16
+      quote: octicons/quote-16
   features:
-    - navigation.tabs
-    - navigation.sections
-    - navigation.expand
+    # Navigation
+    - navigation.instant
+    - navigation.instant.prefetch
+    - navigation.instant.progress
+    - navigation.tracking
+    - navigation.path
     - navigation.top
     - navigation.footer
+    - navigation.indexes
+    # Search
     - search.suggest
     - search.highlight
+    - search.share
+    # Content
     - content.tabs.link
     - content.code.copy
+    - content.code.select
     - content.code.annotate
+    - content.tooltips
+    # Table of contents
+    - toc.follow
+    # Header
+    - announce.dismiss
 
 plugins:
-  - search
+  - search:
+      separator: '[\s\u200b\-_,:!=\[\]()"`/]+|\.(?!\d)|&[lg]t;|(?!\b)(?=[A-Z][a-z])'
+  - social:
+      enabled: !ENV [CI, false]
   - mkdocstrings:
       handlers:
         python:
@@ -43,53 +77,155 @@ plugins:
             docstring_style: google
             show_source: true
             show_root_heading: true
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
             members_order: source
+            signature_crossrefs: true
+  - llmstxt:
+      full_output: llms-full.txt
+      sections:
+        Getting Started:
+          - index.md: Project overview and quick start
+          - installation.md: Installation instructions
+          - getting-help.md: How to get help
+        Core Concepts:
+          - concepts/index.md: Core concepts overview
+          - concepts/middleware.md: Creating middleware
+          - concepts/hooks.md: Lifecycle hooks and context sharing
+          - concepts/decorators.md: Decorator syntax for middleware
+        Advanced Features:
+          - advanced/middleware-chains.md: Middleware chain composition
+          - advanced/parallel-execution.md: Parallel middleware execution
+          - advanced/conditional-middleware.md: Conditional routing
+          - advanced/async-guardrails.md: Async guardrails
+          - advanced/tool-name-filtering.md: Tool name filtering
+          - advanced/on-tool-error.md: Tool error handling hook
+          - advanced/hook-timeouts.md: Per-middleware hook timeouts
+          - advanced/permission-decisions.md: Permission decision protocol
+          - advanced/config-loading.md: JSON/YAML configuration loading
+          - advanced/pipeline-spec.md: Pipeline spec builder
+        Examples:
+          - examples/*.md
+        API Reference:
+          - api/middleware.md: AgentMiddleware API
+          - api/agent.md: MiddlewareAgent API
+          - api/chain.md: MiddlewareChain API
+          - api/conditional.md: ConditionalMiddleware API
+          - api/pipeline_spec.md: PipelineSpec API
+          - api/toolset.md: MiddlewareToolset API
+          - api/decorators.md: Decorator functions
+          - api/exceptions.md: Exception classes
 
 markdown_extensions:
+  # Python Markdown
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+      toc_depth: 3
+  # PyMdownx
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
   - pymdownx.highlight:
       anchor_linenums: true
       line_spans: __span
       pygments_lang_class: true
+      auto_title: true
   - pymdownx.inlinehilite
-  - pymdownx.snippets
-  - pymdownx.superfences
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.snippets:
+      auto_append:
+        - includes/abbreviations.md
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.tabbed:
       alternate_style: true
-  - pymdownx.details
-  - admonition
-  - tables
-  - attr_list
-  - md_in_html
-  - toc:
-      permalink: true
+      combine_header_slug: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
 
 extra:
+  status:
+    new: Recently added
+    deprecated: Deprecated
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/vstorm-co/pydantic-ai-middleware
+      name: GitHub
     - icon: fontawesome/brands/python
       link: https://pypi.org/project/pydantic-ai-middleware/
+      name: PyPI
+  generator: false
+
+extra_css:
+  - stylesheets/extra.css
 
 nav:
-  - Home: index.md
-  - Getting Started:
-    - Installation: installation.md
-    - Quick Start: quickstart.md
-  - Concepts:
+  - Pydantic AI Middleware: index.md
+  - Installation: installation.md
+  - Getting Help: getting-help.md
+  - Core Concepts:
     - concepts/index.md
-    - concepts/middleware.md
-    - concepts/hooks.md
-    - concepts/decorators.md
-    - concepts/parallel-execution.md
+    - Middleware: concepts/middleware.md
+    - Hooks: concepts/hooks.md
+    - Decorators: concepts/decorators.md
+  - Advanced Features:
+    - advanced/middleware-chains.md
+    - advanced/parallel-execution.md
+    - advanced/conditional-middleware.md
+    - advanced/async-guardrails.md
+    - advanced/tool-name-filtering.md
+    - advanced/on-tool-error.md
+    - advanced/hook-timeouts.md
+    - advanced/permission-decisions.md
+    - advanced/config-loading.md
+    - advanced/pipeline-spec.md
   - Examples:
     - examples/index.md
-    - examples/logging.md
-    - examples/security.md
-    - examples/rate-limiting.md
+    - Getting Started:
+      - examples/logging.md
+      - examples/rate-limiting.md
+    - Security:
+      - examples/security.md
+      - examples/pii-detection.md
+      - examples/prompt-injection.md
+      - examples/toxicity-check.md
+      - examples/json-schema-validation.md
+    - Tool Control:
+      - examples/tool-name-filtering.md
+      - examples/tool-error-handling.md
+      - examples/hook-timeouts.md
+      - examples/permission-decisions.md
   - API Reference:
     - api/index.md
-    - api/middleware.md
-    - api/agent.md
-    - api/toolset.md
-    - api/decorators.md
-    - api/exceptions.md
+    - AgentMiddleware: api/middleware.md
+    - MiddlewareAgent: api/agent.md
+    - MiddlewareChain: api/chain.md
+    - ConditionalMiddleware: api/conditional.md
+    - PipelineSpec: api/pipeline_spec.md
+    - MiddlewareToolset: api/toolset.md
+    - Decorators: api/decorators.md
+    - Permissions: api/permissions.md
+    - Exceptions: api/exceptions.md
+
+validation:
+  nav:
+    omitted_files: info

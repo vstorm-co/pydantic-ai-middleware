@@ -12,6 +12,10 @@ class MiddlewareError(Exception):
     """Base exception for middleware errors."""
 
 
+class MiddlewareConfigError(MiddlewareError):
+    """Raised when middleware configuration is invalid."""
+
+
 class InputBlocked(MiddlewareError):
     """Raised when input is blocked by middleware."""
 
@@ -81,6 +85,26 @@ class GuardrailTimeout(MiddlewareError):
         self.guardrail_name = guardrail_name
         self.timeout = timeout
         super().__init__(f"Guardrail '{guardrail_name}' timed out after {timeout:.2f}s")
+
+
+class MiddlewareTimeout(MiddlewareError):
+    """Raised when a middleware hook exceeds its configured timeout."""
+
+    def __init__(self, middleware_name: str, timeout: float, hook_name: str = "") -> None:
+        """Initialize the exception.
+
+        Args:
+            middleware_name: Name/class of the middleware that timed out.
+            timeout: The timeout value in seconds that was exceeded.
+            hook_name: The specific hook that timed out.
+        """
+        self.middleware_name = middleware_name
+        self.timeout = timeout
+        self.hook_name = hook_name
+        detail = f" in {hook_name}" if hook_name else ""
+        super().__init__(
+            f"Middleware '{middleware_name}' timed out{detail} after {timeout:.2f}s"
+        )
 
 
 class AggregationFailed(MiddlewareError):

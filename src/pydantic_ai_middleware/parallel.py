@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable, Coroutine, Sequence
-from typing import TYPE_CHECKING, Any, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast
 
 from pydantic_ai.messages import ModelMessage
 
 from .base import AgentMiddleware, DepsT
 from .context import HookType
 from .exceptions import AggregationFailed
+from .permissions import ToolDecision, ToolPermissionResult
 from .strategies import AggregationStrategy
 
 if TYPE_CHECKING:
@@ -106,6 +107,7 @@ class ParallelMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
         self,
         ctx: ScopedContext | None,
         hook: HookType,
+        count: int | None = None,
     ) -> list[ScopedContext | None]:
         """Create cloned contexts for each middleware to prevent race conditions.
 
@@ -116,15 +118,17 @@ class ParallelMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
         Args:
             ctx: The original scoped context (may be None).
             hook: The hook type for creating scoped views.
+            count: Number of contexts to create. Defaults to len(self.middleware).
 
         Returns:
             List of cloned contexts (or None values if ctx is None).
         """
+        n = count if count is not None else len(self.middleware)
         if ctx is None:
-            return [None] * len(self.middleware)
+            return [None] * n
 
         # Clone the context for each middleware to ensure independence
-        return [ctx._parent.clone().for_hook(hook) for _ in self.middleware]
+        return [ctx._parent.clone().for_hook(hook) for _ in range(n)]
 
     def _merge_contexts(
         self,
@@ -159,6 +163,7 @@ class ParallelMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
         task_factory: Callable[
             [AgentMiddleware[DepsT], ScopedContext | None], Coroutine[Any, Any, ParallelResultT]
         ],
+        middleware: Sequence[AgentMiddleware[DepsT]] | None = None,
     ) -> list[tuple[bool, ParallelResultT]]:
         """Execute middleware in parallel with cloned contexts.
 
@@ -171,17 +176,20 @@ class ParallelMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
             ctx: The original scoped context.
             hook: The hook type being executed.
             task_factory: Function that creates the coroutine for each middleware.
+            middleware: Optional list of middleware to execute. Defaults to self.middleware.
 
         Returns:
             List of (success, result_or_exception) tuples.
         """
+        mw_list = list(middleware) if middleware is not None else self.middleware
+
         # Create isolated contexts for each middleware
-        cloned_contexts = self._create_cloned_contexts(ctx, hook)
+        cloned_contexts = self._create_cloned_contexts(ctx, hook, len(mw_list))
 
         # Create tasks with cloned contexts
         tasks = [
             task_factory(mw, cloned_ctx)
-            for mw, cloned_ctx in zip(self.middleware, cloned_contexts, strict=True)
+            for mw, cloned_ctx in zip(mw_list, cloned_contexts, strict=True)
         ]
 
         # Execute in parallel
@@ -218,7 +226,7 @@ class ParallelMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
             HookType.BEFORE_RUN,
             lambda mw, cloned_ctx: mw.before_run(prompt, deps, cloned_ctx),
         )
-        return self._aggregate_results(results, prompt)
+        return cast("str | Sequence[Any]", self._aggregate_results(results, prompt))
 
     async def after_run(
         self,
@@ -276,7 +284,7 @@ class ParallelMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
             HookType.BEFORE_MODEL_REQUEST,
             lambda mw, cloned_ctx: mw.before_model_request(messages, deps, cloned_ctx),
         )
-        return self._aggregate_results(results, messages)
+        return cast("list[ModelMessage]", self._aggregate_results(results, messages))
 
     async def before_tool_call(
         self,
@@ -284,8 +292,12 @@ class ParallelMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
         tool_args: dict[str, Any],
         deps: DepsT | None,
         ctx: ScopedContext | None = None,
-    ) -> dict[str, Any]:
+    ) -> dict[str, Any] | ToolPermissionResult:
         """Execute all middleware before_tool_call hooks in parallel.
+
+        Only middleware whose ``tool_names`` match the given tool are executed.
+        If any middleware returns a :class:`ToolPermissionResult`, the highest
+        priority decision is returned (DENY > ASK > ALLOW).
 
         Args:
             tool_name: The name of the tool being called.
@@ -294,19 +306,84 @@ class ParallelMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
             ctx: Scoped context for data sharing.
 
         Returns:
-            The (possibly modified) tool arguments based on aggregation strategy.
+            The (possibly modified) tool arguments, or a ToolPermissionResult.
 
         Raises:
             ParallelExecutionFailed: If strategy is ALL_MUST_PASS and any fails.
             AggregationFailed: If aggregation cannot produce a valid result.
             asyncio.TimeoutError: If timeout is exceeded.
         """
+        applicable = [mw for mw in self.middleware if mw._should_handle_tool(tool_name)]
+        if not applicable:
+            return tool_args
+
         results = await self._execute_parallel_with_contexts(
             ctx,
             HookType.BEFORE_TOOL_CALL,
             lambda mw, cloned_ctx: mw.before_tool_call(tool_name, tool_args, deps, cloned_ctx),
+            middleware=applicable,
         )
-        return self._aggregate_results(results, tool_args)
+
+        # Check for ToolPermissionResult with priority: DENY > ASK > ALLOW
+        permission = self._find_priority_permission(results)
+        if permission is not None:
+            return permission
+
+        return cast("dict[str, Any]", self._aggregate_results(results, tool_args))
+
+    async def on_tool_error(
+        self,
+        tool_name: str,
+        tool_args: dict[str, Any],
+        error: Exception,
+        deps: DepsT | None,
+        ctx: ScopedContext | None = None,
+    ) -> Exception | None:
+        """Execute all middleware on_tool_error hooks in parallel.
+
+        Only middleware whose ``tool_names`` match the given tool are executed.
+        Uses FIRST_SUCCESS semantics: the first middleware that returns a
+        non-None exception wins. If all return None, we return None
+        (re-raise original).
+
+        Args:
+            tool_name: The name of the tool that failed.
+            tool_args: The arguments that were passed to the tool.
+            error: The exception raised by the tool.
+            deps: The agent dependencies.
+            ctx: Scoped context for data sharing.
+
+        Returns:
+            A different exception to raise, or None to re-raise the original.
+        """
+        applicable = [mw for mw in self.middleware if mw._should_handle_tool(tool_name)]
+        if not applicable:
+            return None
+
+        cloned_contexts = self._create_cloned_contexts(
+            ctx, HookType.ON_TOOL_ERROR, len(applicable)
+        )
+
+        tasks = [
+            mw.on_tool_error(tool_name, tool_args, error, deps, cloned_ctx)
+            for mw, cloned_ctx in zip(applicable, cloned_contexts, strict=True)
+        ]
+
+        if self.timeout is not None:
+            results = await asyncio.wait_for(
+                asyncio.gather(*tasks),
+                timeout=self.timeout,
+            )
+        else:
+            results = await asyncio.gather(*tasks)
+
+        self._merge_contexts(ctx, cloned_contexts, HookType.ON_TOOL_ERROR)
+
+        for value in results:
+            if value is not None:
+                return value
+
+        return None
 
     async def after_tool_call(
         self,
@@ -317,6 +394,8 @@ class ParallelMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
         ctx: ScopedContext | None = None,
     ) -> Any:
         """Execute all middleware after_tool_call hooks in parallel.
+
+        Only middleware whose ``tool_names`` match the given tool are executed.
 
         Args:
             tool_name: The name of the tool that was called.
@@ -333,12 +412,17 @@ class ParallelMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
             AggregationFailed: If aggregation cannot produce a valid result.
             asyncio.TimeoutError: If timeout is exceeded.
         """
+        applicable = [mw for mw in self.middleware if mw._should_handle_tool(tool_name)]
+        if not applicable:
+            return result
+
         results = await self._execute_parallel_with_contexts(
             ctx,
             HookType.AFTER_TOOL_CALL,
             lambda mw, cloned_ctx: mw.after_tool_call(
                 tool_name, tool_args, result, deps, cloned_ctx
             ),
+            middleware=applicable,
         )
         return self._aggregate_results(results, result)
 
@@ -391,9 +475,39 @@ class ParallelMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
 
         return None
 
+    def _find_priority_permission(
+        self,
+        results: list[tuple[bool, Any]],
+    ) -> ToolPermissionResult | None:
+        """Find highest priority ToolPermissionResult from parallel results.
+
+        Priority order: DENY > ASK > ALLOW.
+
+        Args:
+            results: List of (success, result_or_exception) tuples.
+
+        Returns:
+            The highest priority ToolPermissionResult, or None if no
+            permission results were found.
+        """
+        deny: ToolPermissionResult | None = None
+        ask: ToolPermissionResult | None = None
+        allow: ToolPermissionResult | None = None
+
+        for success, value in results:
+            if success and isinstance(value, ToolPermissionResult):
+                if value.decision == ToolDecision.DENY:
+                    deny = deny or value
+                elif value.decision == ToolDecision.ASK:
+                    ask = ask or value
+                else:
+                    allow = allow or value
+
+        return deny or ask or allow
+
     async def _execute_parallel(
         self,
-        tasks: list,
+        tasks: list[Any],
     ) -> list[tuple[bool, Any]]:
         """Execute tasks in parallel and return results.
 
@@ -420,7 +534,7 @@ class ParallelMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
         # For other strategies, use early cancellation
         return await self._execute_with_early_cancel(tasks)
 
-    async def _execute_all(self, tasks: list) -> list[tuple[bool, Any]]:
+    async def _execute_all(self, tasks: list[Any]) -> list[tuple[bool, Any]]:
         """Execute all tasks and wait for completion."""
         if self.timeout is not None:
             raw_results = await asyncio.wait_for(
@@ -434,7 +548,7 @@ class ParallelMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
 
     async def _execute_with_early_cancel(
         self,
-        tasks: list,
+        tasks: list[Any],
     ) -> list[tuple[bool, Any]]:
         """Execute tasks with early cancellation based on strategy.
 

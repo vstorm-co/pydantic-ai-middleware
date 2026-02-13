@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any, cast
+from typing import Any
 
 import pytest
 
@@ -107,7 +107,7 @@ class TestBeforeModelRequestDecorator:
             return messages + [{"logged": True}]
 
         assert isinstance(log_messages, AgentMiddleware)
-        result = await log_messages.before_model_request(cast(list[Any], [{"msg": 1}]), None)
+        result = await log_messages.before_model_request([{"msg": 1}], None)
         assert result == [{"msg": 1}, {"logged": True}]
 
     async def test_before_model_request_other_methods_passthrough(self) -> None:

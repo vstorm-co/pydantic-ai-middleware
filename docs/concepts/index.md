@@ -1,4 +1,4 @@
-# Concepts
+# Core Concepts
 
 This section covers the core concepts of pydantic-ai-middleware.
 
@@ -59,9 +59,17 @@ async def log_input(prompt, deps, ctx):
     return prompt
 ```
 
-## Learn More
+## Core Concepts
 
-- [Middleware](middleware.md) - Deep dive into middleware
-- [Hooks](hooks.md) - All available lifecycle hooks
-- [Decorators](decorators.md) - Decorator-based middleware
-- [Parallel Execution](parallel-execution.md) - Run middleware in parallel
+- [Middleware](middleware.md) - Deep dive into creating and composing middleware
+- [Hooks](hooks.md) - All available lifecycle hooks and context sharing
+- [Decorators](decorators.md) - Decorator-based middleware creation
+
+## Advanced Features
+
+- [Middleware Chains](../advanced/middleware-chains.md) - Compose and reuse ordered pipelines
+- [Parallel Execution](../advanced/parallel-execution.md) - Run middleware concurrently
+- [Conditional Routing](../advanced/conditional-middleware.md) - Branch execution based on conditions
+- [Async Guardrails](../advanced/async-guardrails.md) - Run guardrails alongside LLM calls
+- [Config Loading](../advanced/config-loading.md) - Load middleware from JSON/YAML
+- [Pipeline Spec](../advanced/pipeline-spec.md) - Build and export pipeline specs
