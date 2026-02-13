@@ -360,9 +360,7 @@ class ParallelMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
         if not applicable:
             return None
 
-        cloned_contexts = self._create_cloned_contexts(
-            ctx, HookType.ON_TOOL_ERROR, len(applicable)
-        )
+        cloned_contexts = self._create_cloned_contexts(ctx, HookType.ON_TOOL_ERROR, len(applicable))
 
         tasks = [
             mw.on_tool_error(tool_name, tool_args, error, deps, cloned_ctx)

@@ -119,9 +119,7 @@ class ToxicityMiddleware(AgentMiddleware[None]):
     def _check(self, text: str) -> ToxicityResult:
         result = score_toxicity(text)
         if self.config.log_results and result.is_toxic:
-            cats = ", ".join(
-                f"{k}={v:.2f}" for k, v in result.categories.items()
-            )
+            cats = ", ".join(f"{k}={v:.2f}" for k, v in result.categories.items())
             words = result.flagged_words
             print(f"    [Toxicity] score={result.score:.2f} | {cats} | words={words}")
         return result

@@ -363,9 +363,7 @@ class ConditionalMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
         """
         middleware = self._select(ctx)
         if middleware:
-            return await self._run_on_tool_error(
-                middleware, tool_name, tool_args, error, deps, ctx
-            )
+            return await self._run_on_tool_error(middleware, tool_name, tool_args, error, deps, ctx)
         return None
 
     async def on_error(

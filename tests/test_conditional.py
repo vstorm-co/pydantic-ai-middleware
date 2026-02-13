@@ -575,9 +575,7 @@ class TestConditionalMiddlewareBeforeToolCall:
                 deps: None,
                 ctx: ScopedContext | None = None,
             ) -> Any:
-                return ToolPermissionResult(
-                    decision=ToolDecision.DENY, reason="blocked"
-                )
+                return ToolPermissionResult(decision=ToolDecision.DENY, reason="blocked")
 
         cond = ConditionalMiddleware(
             condition=lambda ctx: True,

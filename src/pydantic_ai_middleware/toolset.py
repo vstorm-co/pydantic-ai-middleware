@@ -129,9 +129,7 @@ class MiddlewareToolset(WrapperToolset[DepsT], Generic[DepsT]):
         try:
             result = await self.wrapped.call_tool(name, current_args, ctx, tool)
         except Exception as tool_error:
-            on_tool_error_ctx = (
-                self.ctx.for_hook(HookType.ON_TOOL_ERROR) if self.ctx else None
-            )
+            on_tool_error_ctx = self.ctx.for_hook(HookType.ON_TOOL_ERROR) if self.ctx else None
             for mw in self.middleware:
                 if not mw._should_handle_tool(name):
                     continue

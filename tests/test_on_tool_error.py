@@ -151,8 +151,12 @@ class TestOnToolErrorInToolset:
 
         class ErrorHandler(AgentMiddleware[None]):
             async def on_tool_error(
-                self, tool_name: str, tool_args: dict[str, Any], error: Exception,
-                deps: None, ctx: ScopedContext | None = None
+                self,
+                tool_name: str,
+                tool_args: dict[str, Any],
+                error: Exception,
+                deps: None,
+                ctx: ScopedContext | None = None,
             ) -> Exception | None:
                 calls.append((tool_name, str(error)))
                 return None
@@ -172,8 +176,12 @@ class TestOnToolErrorInToolset:
     async def test_on_tool_error_can_replace_exception(self) -> None:
         class ErrorConverter(AgentMiddleware[None]):
             async def on_tool_error(
-                self, tool_name: str, tool_args: dict[str, Any], error: Exception,
-                deps: None, ctx: ScopedContext | None = None
+                self,
+                tool_name: str,
+                tool_args: dict[str, Any],
+                error: Exception,
+                deps: None,
+                ctx: ScopedContext | None = None,
             ) -> Exception | None:
                 return ValueError(f"converted: {error}")
 
@@ -192,8 +200,12 @@ class TestOnToolErrorInToolset:
 
         class ErrorTracker(AgentMiddleware[None]):
             async def on_tool_error(
-                self, tool_name: str, tool_args: dict[str, Any], error: Exception,
-                deps: None, ctx: ScopedContext | None = None
+                self,
+                tool_name: str,
+                tool_args: dict[str, Any],
+                error: Exception,
+                deps: None,
+                ctx: ScopedContext | None = None,
             ) -> Exception | None:
                 calls.append("error_handler_called")
                 return None
@@ -216,8 +228,12 @@ class TestOnToolErrorInToolset:
             tool_names = {"send_email"}
 
             async def on_tool_error(
-                self, tool_name: str, tool_args: dict[str, Any], error: Exception,
-                deps: None, ctx: ScopedContext | None = None
+                self,
+                tool_name: str,
+                tool_args: dict[str, Any],
+                error: Exception,
+                deps: None,
+                ctx: ScopedContext | None = None,
             ) -> Exception | None:
                 calls.append(tool_name)
                 return None
@@ -244,8 +260,12 @@ class TestOnToolErrorInToolset:
 
         class ContextHandler(AgentMiddleware[None]):
             async def on_tool_error(
-                self, tool_name: str, tool_args: dict[str, Any], error: Exception,
-                deps: None, ctx: ScopedContext | None = None
+                self,
+                tool_name: str,
+                tool_args: dict[str, Any],
+                error: Exception,
+                deps: None,
+                ctx: ScopedContext | None = None,
             ) -> Exception | None:
                 if ctx is not None:
                     ctx.set("error_tool", tool_name)
@@ -276,16 +296,24 @@ class TestOnToolErrorInChain:
 
         class Handler1(AgentMiddleware[None]):
             async def on_tool_error(
-                self, tool_name: str, tool_args: dict[str, Any], error: Exception,
-                deps: None, ctx: ScopedContext | None = None
+                self,
+                tool_name: str,
+                tool_args: dict[str, Any],
+                error: Exception,
+                deps: None,
+                ctx: ScopedContext | None = None,
             ) -> Exception | None:
                 calls.append("h1")
                 return None
 
         class Handler2(AgentMiddleware[None]):
             async def on_tool_error(
-                self, tool_name: str, tool_args: dict[str, Any], error: Exception,
-                deps: None, ctx: ScopedContext | None = None
+                self,
+                tool_name: str,
+                tool_args: dict[str, Any],
+                error: Exception,
+                deps: None,
+                ctx: ScopedContext | None = None,
             ) -> Exception | None:
                 calls.append("h2")
                 return ValueError("handled")
@@ -299,8 +327,12 @@ class TestOnToolErrorInChain:
     async def test_chain_on_tool_error_all_none(self) -> None:
         class NoopHandler(AgentMiddleware[None]):
             async def on_tool_error(
-                self, tool_name: str, tool_args: dict[str, Any], error: Exception,
-                deps: None, ctx: ScopedContext | None = None
+                self,
+                tool_name: str,
+                tool_args: dict[str, Any],
+                error: Exception,
+                deps: None,
+                ctx: ScopedContext | None = None,
             ) -> Exception | None:
                 return None
 
@@ -315,16 +347,24 @@ class TestOnToolErrorInChain:
             tool_names = {"send_email"}
 
             async def on_tool_error(
-                self, tool_name: str, tool_args: dict[str, Any], error: Exception,
-                deps: None, ctx: ScopedContext | None = None
+                self,
+                tool_name: str,
+                tool_args: dict[str, Any],
+                error: Exception,
+                deps: None,
+                ctx: ScopedContext | None = None,
             ) -> Exception | None:
                 calls.append("email")
                 return None
 
         class AllHandler(AgentMiddleware[None]):
             async def on_tool_error(
-                self, tool_name: str, tool_args: dict[str, Any], error: Exception,
-                deps: None, ctx: ScopedContext | None = None
+                self,
+                tool_name: str,
+                tool_args: dict[str, Any],
+                error: Exception,
+                deps: None,
+                ctx: ScopedContext | None = None,
             ) -> Exception | None:
                 calls.append("all")
                 return None
@@ -339,16 +379,24 @@ class TestOnToolErrorInChain:
 
         class Handler1(AgentMiddleware[None]):
             async def on_tool_error(
-                self, tool_name: str, tool_args: dict[str, Any], error: Exception,
-                deps: None, ctx: ScopedContext | None = None
+                self,
+                tool_name: str,
+                tool_args: dict[str, Any],
+                error: Exception,
+                deps: None,
+                ctx: ScopedContext | None = None,
             ) -> Exception | None:
                 calls.append("h1")
                 return ValueError("from h1")
 
         class Handler2(AgentMiddleware[None]):
             async def on_tool_error(
-                self, tool_name: str, tool_args: dict[str, Any], error: Exception,
-                deps: None, ctx: ScopedContext | None = None
+                self,
+                tool_name: str,
+                tool_args: dict[str, Any],
+                error: Exception,
+                deps: None,
+                ctx: ScopedContext | None = None,
             ) -> Exception | None:
                 calls.append("h2")
                 return None
@@ -368,8 +416,12 @@ class TestOnToolErrorInConditional:
 
         class HandlerMW(AgentMiddleware[None]):
             async def on_tool_error(
-                self, tool_name: str, tool_args: dict[str, Any], error: Exception,
-                deps: None, ctx: ScopedContext | None = None
+                self,
+                tool_name: str,
+                tool_args: dict[str, Any],
+                error: Exception,
+                deps: None,
+                ctx: ScopedContext | None = None,
             ) -> Exception | None:
                 return ValueError("handled by conditional")
 
@@ -387,16 +439,24 @@ class TestOnToolErrorInConditional:
 
         class TrueHandler(AgentMiddleware[None]):
             async def on_tool_error(
-                self, tool_name: str, tool_args: dict[str, Any], error: Exception,
-                deps: None, ctx: ScopedContext | None = None
+                self,
+                tool_name: str,
+                tool_args: dict[str, Any],
+                error: Exception,
+                deps: None,
+                ctx: ScopedContext | None = None,
             ) -> Exception | None:
                 calls.append("true")
                 return None
 
         class FalseHandler(AgentMiddleware[None]):
             async def on_tool_error(
-                self, tool_name: str, tool_args: dict[str, Any], error: Exception,
-                deps: None, ctx: ScopedContext | None = None
+                self,
+                tool_name: str,
+                tool_args: dict[str, Any],
+                error: Exception,
+                deps: None,
+                ctx: ScopedContext | None = None,
             ) -> Exception | None:
                 calls.append("false")
                 return None
@@ -433,8 +493,12 @@ class TestOnToolErrorInAsyncGuardrail:
 
         class GuardrailMW(AgentMiddleware[None]):
             async def on_tool_error(
-                self, tool_name: str, tool_args: dict[str, Any], error: Exception,
-                deps: None, ctx: ScopedContext | None = None
+                self,
+                tool_name: str,
+                tool_args: dict[str, Any],
+                error: Exception,
+                deps: None,
+                ctx: ScopedContext | None = None,
             ) -> Exception | None:
                 calls.append("guardrail_handler")
                 return ValueError("guardrail handled")
@@ -456,8 +520,12 @@ class TestOnToolErrorInAsyncGuardrail:
 
         class GuardrailMW(AgentMiddleware[None]):
             async def on_tool_error(
-                self, tool_name: str, tool_args: dict[str, Any], error: Exception,
-                deps: None, ctx: ScopedContext | None = None
+                self,
+                tool_name: str,
+                tool_args: dict[str, Any],
+                error: Exception,
+                deps: None,
+                ctx: ScopedContext | None = None,
             ) -> Exception | None:
                 calls.append("should_not_be_called")
                 return None
@@ -482,16 +550,24 @@ class TestOnToolErrorInParallel:
 
         class Handler1(AgentMiddleware[None]):
             async def on_tool_error(
-                self, tool_name: str, tool_args: dict[str, Any], error: Exception,
-                deps: None, ctx: ScopedContext | None = None
+                self,
+                tool_name: str,
+                tool_args: dict[str, Any],
+                error: Exception,
+                deps: None,
+                ctx: ScopedContext | None = None,
             ) -> Exception | None:
                 calls.append("h1")
                 return None
 
         class Handler2(AgentMiddleware[None]):
             async def on_tool_error(
-                self, tool_name: str, tool_args: dict[str, Any], error: Exception,
-                deps: None, ctx: ScopedContext | None = None
+                self,
+                tool_name: str,
+                tool_args: dict[str, Any],
+                error: Exception,
+                deps: None,
+                ctx: ScopedContext | None = None,
             ) -> Exception | None:
                 calls.append("h2")
                 return ValueError("from h2")
@@ -508,8 +584,12 @@ class TestOnToolErrorInParallel:
 
         class NoopHandler(AgentMiddleware[None]):
             async def on_tool_error(
-                self, tool_name: str, tool_args: dict[str, Any], error: Exception,
-                deps: None, ctx: ScopedContext | None = None
+                self,
+                tool_name: str,
+                tool_args: dict[str, Any],
+                error: Exception,
+                deps: None,
+                ctx: ScopedContext | None = None,
             ) -> Exception | None:
                 return None
 
@@ -522,8 +602,12 @@ class TestOnToolErrorInParallel:
 
         class Handler(AgentMiddleware[None]):
             async def on_tool_error(
-                self, tool_name: str, tool_args: dict[str, Any], error: Exception,
-                deps: None, ctx: ScopedContext | None = None
+                self,
+                tool_name: str,
+                tool_args: dict[str, Any],
+                error: Exception,
+                deps: None,
+                ctx: ScopedContext | None = None,
             ) -> Exception | None:
                 return None
 
@@ -536,8 +620,12 @@ class TestOnToolErrorInParallel:
 
         class ContextHandler(AgentMiddleware[None]):
             async def on_tool_error(
-                self, tool_name: str, tool_args: dict[str, Any], error: Exception,
-                deps: None, ctx: ScopedContext | None = None
+                self,
+                tool_name: str,
+                tool_args: dict[str, Any],
+                error: Exception,
+                deps: None,
+                ctx: ScopedContext | None = None,
             ) -> Exception | None:
                 if ctx is not None:
                     ctx.set("handled", True)
@@ -558,8 +646,11 @@ class TestOnToolErrorDecorator:
     async def test_basic_decorator(self) -> None:
         @on_tool_error
         async def handler(
-            tool_name: str, tool_args: dict[str, Any], error: Exception,
-            deps: None, ctx: ScopedContext | None
+            tool_name: str,
+            tool_args: dict[str, Any],
+            error: Exception,
+            deps: None,
+            ctx: ScopedContext | None,
         ) -> Exception | None:
             return ValueError(f"handled: {tool_name}")
 
@@ -570,8 +661,11 @@ class TestOnToolErrorDecorator:
     async def test_decorator_with_tools(self) -> None:
         @on_tool_error(tools={"send_email"})
         async def handler(
-            tool_name: str, tool_args: dict[str, Any], error: Exception,
-            deps: None, ctx: ScopedContext | None
+            tool_name: str,
+            tool_args: dict[str, Any],
+            error: Exception,
+            deps: None,
+            ctx: ScopedContext | None,
         ) -> Exception | None:
             return None
 
@@ -583,8 +677,11 @@ class TestOnToolErrorDecorator:
 
         @on_tool_error
         async def handler(
-            tool_name: str, tool_args: dict[str, Any], error: Exception,
-            deps: None, ctx: ScopedContext | None
+            tool_name: str,
+            tool_args: dict[str, Any],
+            error: Exception,
+            deps: None,
+            ctx: ScopedContext | None,
         ) -> Exception | None:
             return None
 

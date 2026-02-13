@@ -176,7 +176,12 @@ class TestTimeoutInToolset:
             timeout = 0.01
 
             async def after_tool_call(
-                self, tool_name: str, tool_args: dict[str, Any], result: Any, deps: None, ctx: Any = None
+                self,
+                tool_name: str,
+                tool_args: dict[str, Any],
+                result: Any,
+                deps: None,
+                ctx: Any = None,
             ) -> Any:
                 await asyncio.sleep(10)
                 return result  # pragma: no cover
@@ -195,8 +200,12 @@ class TestTimeoutInToolset:
             timeout = 0.01
 
             async def on_tool_error(
-                self, tool_name: str, tool_args: dict[str, Any], error: Exception,
-                deps: None, ctx: Any = None
+                self,
+                tool_name: str,
+                tool_args: dict[str, Any],
+                error: Exception,
+                deps: None,
+                ctx: Any = None,
             ) -> Exception | None:
                 await asyncio.sleep(10)
                 return None  # pragma: no cover
@@ -220,7 +229,11 @@ class TestTimeoutInToolset:
                 return {}  # type: ignore
 
             async def call_tool(
-                self, name: str, tool_args: dict[str, Any], ctx: RunContext[None], tool: ToolsetTool[None]
+                self,
+                name: str,
+                tool_args: dict[str, Any],
+                ctx: RunContext[None],
+                tool: ToolsetTool[None],
             ) -> Any:
                 raise RuntimeError("fail")
 

@@ -309,9 +309,7 @@ class AsyncGuardrailMiddleware(AgentMiddleware[DepsT], Generic[DepsT]):
             A different exception to raise, or None to re-raise the original.
         """
         if self.timing == GuardrailTiming.BLOCKING:
-            return await self.guardrail.on_tool_error(
-                tool_name, tool_args, error, deps, ctx
-            )
+            return await self.guardrail.on_tool_error(tool_name, tool_args, error, deps, ctx)
         return None
 
     async def on_error(

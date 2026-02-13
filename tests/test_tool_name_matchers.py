@@ -121,7 +121,12 @@ class TestToolNameFilteringInToolset:
                 return tool_args
 
             async def after_tool_call(
-                self, tool_name: str, tool_args: dict[str, Any], result: Any, deps: None, ctx: Any = None
+                self,
+                tool_name: str,
+                tool_args: dict[str, Any],
+                result: Any,
+                deps: None,
+                ctx: Any = None,
             ) -> Any:
                 calls.append(f"after:{tool_name}")
                 return result
@@ -190,7 +195,12 @@ class TestToolNameFilteringInChain:
                 return tool_args
 
             async def after_tool_call(
-                self, tool_name: str, tool_args: dict[str, Any], result: Any, deps: None, ctx: Any = None
+                self,
+                tool_name: str,
+                tool_args: dict[str, Any],
+                result: Any,
+                deps: None,
+                ctx: Any = None,
             ) -> Any:
                 calls.append("after_A")
                 return result
@@ -203,7 +213,12 @@ class TestToolNameFilteringInChain:
                 return tool_args
 
             async def after_tool_call(
-                self, tool_name: str, tool_args: dict[str, Any], result: Any, deps: None, ctx: Any = None
+                self,
+                tool_name: str,
+                tool_args: dict[str, Any],
+                result: Any,
+                deps: None,
+                ctx: Any = None,
             ) -> Any:
                 calls.append("after_B")
                 return result
@@ -240,7 +255,11 @@ class TestDecoratorToolsParam:
     async def test_after_tool_call_with_tools(self) -> None:
         @after_tool_call(tools={"read_file"})
         async def log_read(
-            tool_name: str, tool_args: dict[str, Any], result: Any, deps: None, ctx: ScopedContext | None
+            tool_name: str,
+            tool_args: dict[str, Any],
+            result: Any,
+            deps: None,
+            ctx: ScopedContext | None,
         ) -> Any:
             return result
 
@@ -250,7 +269,11 @@ class TestDecoratorToolsParam:
     async def test_on_tool_error_with_tools(self) -> None:
         @on_tool_error(tools={"dangerous"})
         async def handle_danger(
-            tool_name: str, tool_args: dict[str, Any], error: Exception, deps: None, ctx: ScopedContext | None
+            tool_name: str,
+            tool_args: dict[str, Any],
+            error: Exception,
+            deps: None,
+            ctx: ScopedContext | None,
         ) -> Exception | None:
             return RuntimeError("safe error")
 
@@ -349,14 +372,24 @@ class TestToolNameFilteringInParallel:
             tool_names = {"write_file"}
 
             async def after_tool_call(
-                self, tool_name: str, tool_args: dict[str, Any], result: Any, deps: None, ctx: Any = None
+                self,
+                tool_name: str,
+                tool_args: dict[str, Any],
+                result: Any,
+                deps: None,
+                ctx: Any = None,
             ) -> Any:
                 calls.append("file")
                 return result
 
         class AllMW(AgentMiddleware[None]):
             async def after_tool_call(
-                self, tool_name: str, tool_args: dict[str, Any], result: Any, deps: None, ctx: Any = None
+                self,
+                tool_name: str,
+                tool_args: dict[str, Any],
+                result: Any,
+                deps: None,
+                ctx: Any = None,
             ) -> Any:
                 calls.append("all")
                 return result
@@ -377,7 +410,12 @@ class TestToolNameFilteringInParallel:
             tool_names = {"write_file"}
 
             async def after_tool_call(
-                self, tool_name: str, tool_args: dict[str, Any], result: Any, deps: None, ctx: Any = None
+                self,
+                tool_name: str,
+                tool_args: dict[str, Any],
+                result: Any,
+                deps: None,
+                ctx: Any = None,
             ) -> Any:
                 return "modified"
 
@@ -393,7 +431,12 @@ class TestToolNameFilteringInParallel:
             tool_names = {"db_query"}
 
             async def on_tool_error(
-                self, tool_name: str, tool_args: dict[str, Any], error: Exception, deps: None, ctx: Any = None
+                self,
+                tool_name: str,
+                tool_args: dict[str, Any],
+                error: Exception,
+                deps: None,
+                ctx: Any = None,
             ) -> Exception | None:
                 calls.append("db")
                 return ValueError("handled by db")
@@ -518,7 +561,12 @@ class TestToolNameFilteringInConditional:
             tool_names = {"write_file"}
 
             async def after_tool_call(
-                self, tool_name: str, tool_args: dict[str, Any], result: Any, deps: None, ctx: Any = None
+                self,
+                tool_name: str,
+                tool_args: dict[str, Any],
+                result: Any,
+                deps: None,
+                ctx: Any = None,
             ) -> Any:
                 calls.append("file")
                 return result
@@ -538,7 +586,12 @@ class TestToolNameFilteringInConditional:
             tool_names = {"db_query"}
 
             async def on_tool_error(
-                self, tool_name: str, tool_args: dict[str, Any], error: Exception, deps: None, ctx: Any = None
+                self,
+                tool_name: str,
+                tool_args: dict[str, Any],
+                error: Exception,
+                deps: None,
+                ctx: Any = None,
             ) -> Exception | None:
                 return ValueError("handled")
 

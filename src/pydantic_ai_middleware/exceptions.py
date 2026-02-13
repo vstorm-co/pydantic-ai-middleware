@@ -102,9 +102,7 @@ class MiddlewareTimeout(MiddlewareError):
         self.timeout = timeout
         self.hook_name = hook_name
         detail = f" in {hook_name}" if hook_name else ""
-        super().__init__(
-            f"Middleware '{middleware_name}' timed out{detail} after {timeout:.2f}s"
-        )
+        super().__init__(f"Middleware '{middleware_name}' timed out{detail} after {timeout:.2f}s")
 
 
 class AggregationFailed(MiddlewareError):
