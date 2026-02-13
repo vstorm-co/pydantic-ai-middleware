@@ -1,7 +1,7 @@
 <h1 align="center">Pydantic AI Middleware</h1>
 
 <p align="center">
-  <b>Clean Before/After Hooks for Pydantic AI Agents — No Imposed Structure</b>
+  <b>Intercept, Transform & Guard Every Pydantic AI Call</b>
 </p>
 
 <p align="center">
@@ -85,82 +85,26 @@ pydantic-ai-middleware takes a different approach from traditional guardrails li
 
 ## Features
 
-**7 Lifecycle Hooks** — before_run, after_run, before_model_request, before_tool_call, on_tool_error, after_tool_call, on_error
-
-**Parallel Execution** — Run multiple middleware concurrently with 4 aggregation strategies and early cancellation
-
-**Async Guardrails** — Run guardrails alongside LLM calls with BLOCKING, CONCURRENT, or ASYNC_POST timing
-
-**Middleware Chains** — Compose middleware into reusable, ordered sequences with `+` operator
-
-**Conditional Routing** — Route to different middleware based on runtime conditions
-
-**Config Loading** — Build pipelines from JSON/YAML configuration files
-
-**Decorator Syntax** — Create middleware from simple decorated functions
-
-**Context Sharing** — Share data between hooks with access control
-
-**Tool Name Filtering** — Scope middleware to specific tools with `tool_names`
-
-**Hook Timeouts** — Per-middleware timeout enforcement with `MiddlewareTimeout`
-
-**Permission Decisions** — Structured ALLOW/DENY/ASK protocol for tool authorization
-
-**Zero Overhead** — No mandatory dependencies beyond pydantic-ai-slim
+- **7 Lifecycle Hooks** — `before_run`, `after_run`, `before_model_request`, `before_tool_call`, `on_tool_error`, `after_tool_call`, `on_error`
+- **Parallel Execution** — Run multiple middleware concurrently with 4 aggregation strategies and early cancellation
+- **Async Guardrails** — Run guardrails alongside LLM calls with `BLOCKING`, `CONCURRENT`, or `ASYNC_POST` timing
+- **Middleware Chains** — Compose middleware into reusable, ordered sequences with `+` operator
+- **Conditional Routing** — Route to different middleware based on runtime conditions
+- **Config Loading** — Build pipelines from JSON/YAML configuration files
+- **Decorator Syntax** — Create middleware from simple decorated functions
+- **Context Sharing** — Share data between hooks with access control
+- **Tool Name Filtering** — Scope middleware to specific tools with `tool_names`
+- **Hook Timeouts** — Per-middleware timeout enforcement with `MiddlewareTimeout`
+- **Permission Decisions** — Structured ALLOW/DENY/ASK protocol for tool authorization
+- **Zero Overhead** — No mandatory dependencies beyond pydantic-ai
 
 ---
 
 ## Hook Lifecycle
 
-```
-                          ╭─────────╮
-                          │  input  │
-                          ╰────┬────╯
-                               │
-                               ▼
-                    ┌────────────────────┐
-                    │    before_run      │─── can block (InputBlocked)
-                    └─────────┬──────────┘
-                              │
-                              ▼
-                 ┌─────────────────────────┐
-             ┌──▶│  before_model_request   │─── modify messages
-             │   └────────────┬────────────┘
-             │                │
-             │                ▼
-             │          ╔═══════════╗
-             │          ║   Model   ║
-             │          ╚═════╤═════╝
-             │           ╱         ╲
-             │      tool call    finish
-             │         ╱             ╲
-             │        ▼               ▼
-             │  ┌──────────────┐  ┌──────────────┐
-             │  │before_tool_  │  │   after_run  │─── modify output
-             │  │    call      │  └──────┬───────┘
-             │  └──────┬───────┘         │
-             │         │            ╭────┴────╮
-             │         ▼            │ output  │
-             │    ┌─────────┐       ╰─────────╯
-             │    │  tool   │
-             │    └────┬────┘
-             │     ╱       ╲
-             │  success   error
-             │    │         │
-             │    ▼         ▼
-             │ ┌────────┐ ┌───────────────┐
-             │ │ after_ │ │ on_tool_error │─── replace exception
-             │ │ tool_  │ └───────┬───────┘
-             │ │  call  │         │
-             │ └───┬────┘         │
-             │     └──────┬───────┘
-             │            │
-             └────────────┘
-              observation
-
-      ── on_error: called on any unhandled exception ──
-```
+<p align="center">
+  <img src="assets/img.png" alt="Hook Lifecycle Diagram" width="600">
+</p>
 
 | Hook | When Called | Can Modify |
 |------|-------------|------------|
@@ -584,5 +528,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for full guidelines.
 MIT — see [LICENSE](LICENSE)
 
 <p align="center">
-  <sub>Built with care by <a href="https://github.com/vstorm-co">vstorm-co</a></sub>
+  <sub>Built with ❤️ by <a href="https://github.com/vstorm-co">vstorm-co</a></sub>
 </p>
