@@ -10,6 +10,7 @@ import pytest
 from pydantic_ai_middleware import (
     AgentMiddleware,
     InputBlocked,
+    ScopedContext,
     ToolBlocked,
     after_run,
     after_tool_call,
@@ -27,7 +28,9 @@ class TestBeforeRunDecorator:
         """Test basic before_run decorator."""
 
         @before_run
-        async def log_input(prompt: str | Sequence[Any], deps: None) -> str | Sequence[Any]:
+        async def log_input(
+            prompt: str | Sequence[Any], deps: None, ctx: ScopedContext | None
+        ) -> str | Sequence[Any]:
             return f"logged: {prompt}"
 
         assert isinstance(log_input, AgentMiddleware)
@@ -38,7 +41,9 @@ class TestBeforeRunDecorator:
         """Test before_run can raise InputBlocked."""
 
         @before_run
-        async def block_input(prompt: str | Sequence[Any], deps: None) -> str | Sequence[Any]:
+        async def block_input(
+            prompt: str | Sequence[Any], deps: None, ctx: ScopedContext | None
+        ) -> str | Sequence[Any]:
             raise InputBlocked("Blocked!")
 
         with pytest.raises(InputBlocked):
@@ -48,7 +53,9 @@ class TestBeforeRunDecorator:
         """Test that other methods are passthroughs."""
 
         @before_run
-        async def my_middleware(prompt: str | Sequence[Any], deps: None) -> str | Sequence[Any]:
+        async def my_middleware(
+            prompt: str | Sequence[Any], deps: None, ctx: ScopedContext | None
+        ) -> str | Sequence[Any]:
             return prompt
 
         # Other methods should be passthrough
@@ -65,7 +72,9 @@ class TestAfterRunDecorator:
         """Test basic after_run decorator."""
 
         @after_run
-        async def modify_output(prompt: str | Sequence[Any], output: Any, deps: None) -> Any:
+        async def modify_output(
+            prompt: str | Sequence[Any], output: Any, deps: None, ctx: ScopedContext | None
+        ) -> Any:
             return f"modified: {output}"
 
         assert isinstance(modify_output, AgentMiddleware)
@@ -76,7 +85,9 @@ class TestAfterRunDecorator:
         """Test after_run can access original prompt."""
 
         @after_run
-        async def add_prompt_to_output(prompt: str | Sequence[Any], output: Any, deps: None) -> Any:
+        async def add_prompt_to_output(
+            prompt: str | Sequence[Any], output: Any, deps: None, ctx: ScopedContext | None
+        ) -> Any:
             return {"prompt": prompt, "output": output}
 
         result = await add_prompt_to_output.after_run("original", "result", None)
@@ -90,7 +101,9 @@ class TestBeforeModelRequestDecorator:
         """Test basic before_model_request decorator."""
 
         @before_model_request
-        async def log_messages(messages: list[Any], deps: None) -> list[Any]:
+        async def log_messages(
+            messages: list[Any], deps: None, ctx: ScopedContext | None
+        ) -> list[Any]:
             return messages + [{"logged": True}]
 
         assert isinstance(log_messages, AgentMiddleware)
@@ -101,7 +114,9 @@ class TestBeforeModelRequestDecorator:
         """Test that other methods are passthroughs for before_model_request."""
 
         @before_model_request
-        async def my_middleware(messages: list[Any], deps: None) -> list[Any]:
+        async def my_middleware(
+            messages: list[Any], deps: None, ctx: ScopedContext | None
+        ) -> list[Any]:
             return messages
 
         # before_run should be passthrough
@@ -116,7 +131,7 @@ class TestBeforeToolCallDecorator:
 
         @before_tool_call
         async def validate_tool(
-            tool_name: str, tool_args: dict[str, Any], deps: None
+            tool_name: str, tool_args: dict[str, Any], deps: None, ctx: ScopedContext | None
         ) -> dict[str, Any]:
             return {**tool_args, "validated": True}
 
@@ -129,7 +144,7 @@ class TestBeforeToolCallDecorator:
 
         @before_tool_call
         async def block_dangerous(
-            tool_name: str, tool_args: dict[str, Any], deps: None
+            tool_name: str, tool_args: dict[str, Any], deps: None, ctx: ScopedContext | None
         ) -> dict[str, Any]:
             if tool_name == "dangerous":
                 raise ToolBlocked(tool_name, "Not allowed")
@@ -148,7 +163,11 @@ class TestAfterToolCallDecorator:
 
         @after_tool_call
         async def log_result(
-            tool_name: str, tool_args: dict[str, Any], result: Any, deps: None
+            tool_name: str,
+            tool_args: dict[str, Any],
+            result: Any,
+            deps: None,
+            ctx: ScopedContext | None,
         ) -> Any:
             return {"tool": tool_name, "result": result}
 
@@ -161,7 +180,11 @@ class TestAfterToolCallDecorator:
 
         @after_tool_call
         async def my_middleware(
-            tool_name: str, tool_args: dict[str, Any], result: Any, deps: None
+            tool_name: str,
+            tool_args: dict[str, Any],
+            result: Any,
+            deps: None,
+            ctx: ScopedContext | None,
         ) -> Any:
             return result
 
@@ -177,7 +200,9 @@ class TestOnErrorDecorator:
         """Test on_error returning None re-raises original."""
 
         @on_error
-        async def log_error(error: Exception, deps: None) -> Exception | None:
+        async def log_error(
+            error: Exception, deps: None, ctx: ScopedContext | None
+        ) -> Exception | None:
             return None
 
         assert isinstance(log_error, AgentMiddleware)
@@ -188,7 +213,9 @@ class TestOnErrorDecorator:
         """Test on_error can return a different exception."""
 
         @on_error
-        async def convert_error(error: Exception, deps: None) -> Exception | None:
+        async def convert_error(
+            error: Exception, deps: None, ctx: ScopedContext | None
+        ) -> Exception | None:
             return RuntimeError("converted")
 
         result = await convert_error.on_error(ValueError("test"), None)
@@ -204,7 +231,9 @@ class TestDecoratorWithDeps:
 
         @before_run
         async def use_deps(
-            prompt: str | Sequence[Any], deps: dict[str, str] | None
+            prompt: str | Sequence[Any],
+            deps: dict[str, str] | None,
+            ctx: ScopedContext | None,
         ) -> str | Sequence[Any]:
             if deps and "user" in deps:
                 return f"[{deps['user']}] {prompt}"
@@ -222,6 +251,7 @@ class TestDecoratorWithDeps:
             tool_args: dict[str, Any],
             result: Any,
             deps: dict[str, str] | None,
+            ctx: ScopedContext | None,
         ) -> Any:
             if deps and "audit" in deps:
                 return {"result": result, "audited_by": deps["audit"]}

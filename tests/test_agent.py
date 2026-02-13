@@ -13,6 +13,8 @@ from pydantic_ai_middleware import (
     AgentMiddleware,
     InputBlocked,
     MiddlewareAgent,
+    MiddlewareContext,
+    ScopedContext,
 )
 
 
@@ -24,15 +26,21 @@ class LoggingMiddleware(AgentMiddleware[None]):
         self.after_run_calls: list[tuple[str | Sequence[Any], Any]] = []
         self.errors: list[Exception] = []
 
-    async def before_run(self, prompt: str | Sequence[Any], deps: None) -> str | Sequence[Any]:
+    async def before_run(
+        self, prompt: str | Sequence[Any], deps: None, ctx: ScopedContext | None = None
+    ) -> str | Sequence[Any]:
         self.before_run_calls.append(prompt)
         return prompt
 
-    async def after_run(self, prompt: str | Sequence[Any], output: Any, deps: None) -> Any:
+    async def after_run(
+        self, prompt: str | Sequence[Any], output: Any, deps: None, ctx: ScopedContext | None = None
+    ) -> Any:
         self.after_run_calls.append((prompt, output))
         return output
 
-    async def on_error(self, error: Exception, deps: None) -> Exception | None:
+    async def on_error(
+        self, error: Exception, deps: None, ctx: ScopedContext | None = None
+    ) -> Exception | None:
         self.errors.append(error)
         return None
 
@@ -43,12 +51,16 @@ class ModifyingMiddleware(AgentMiddleware[None]):
     def __init__(self, prefix: str = "modified") -> None:
         self.prefix = prefix
 
-    async def before_run(self, prompt: str | Sequence[Any], deps: None) -> str | Sequence[Any]:
+    async def before_run(
+        self, prompt: str | Sequence[Any], deps: None, ctx: ScopedContext | None = None
+    ) -> str | Sequence[Any]:
         if isinstance(prompt, str):
             return f"{self.prefix}: {prompt}"
         return prompt
 
-    async def after_run(self, prompt: str | Sequence[Any], output: Any, deps: None) -> Any:
+    async def after_run(
+        self, prompt: str | Sequence[Any], output: Any, deps: None, ctx: ScopedContext | None = None
+    ) -> Any:
         return f"{self.prefix} output: {output}"
 
 
@@ -58,7 +70,9 @@ class BlockingMiddleware(AgentMiddleware[None]):
     def __init__(self, blocked_words: set[str]) -> None:
         self.blocked_words = blocked_words
 
-    async def before_run(self, prompt: str | Sequence[Any], deps: None) -> str | Sequence[Any]:
+    async def before_run(
+        self, prompt: str | Sequence[Any], deps: None, ctx: ScopedContext | None = None
+    ) -> str | Sequence[Any]:
         if isinstance(prompt, str):
             for word in self.blocked_words:
                 if word in prompt.lower():
@@ -73,7 +87,9 @@ class ErrorHandlingMiddleware(AgentMiddleware[None]):
         self.convert_to = convert_to
         self.handled_errors: list[Exception] = []
 
-    async def on_error(self, error: Exception, deps: None) -> Exception | None:
+    async def on_error(
+        self, error: Exception, deps: None, ctx: ScopedContext | None = None
+    ) -> Exception | None:
         self.handled_errors.append(error)
         if self.convert_to:
             return self.convert_to(f"Converted: {error}")
@@ -95,6 +111,19 @@ class TestMiddlewareAgentProperties:
         mw = LoggingMiddleware()
         middleware_agent = MiddlewareAgent(agent, middleware=[mw])
         assert middleware_agent.middleware == [mw]
+
+    def test_context_property(self) -> None:
+        """Test context property."""
+        agent = Agent(TestModel(), output_type=str)
+        ctx = MiddlewareContext(config={"max_retries": 3, "timeout": 30.0})
+        middleware_agent = MiddlewareAgent(agent, context=ctx)
+        assert middleware_agent.context is ctx
+
+    def test_context_default_none(self) -> None:
+        """Test context defaults to None."""
+        agent = Agent(TestModel(), output_type=str)
+        middleware_agent = MiddlewareAgent(agent)
+        assert middleware_agent.context is None
 
     def test_model_property(self) -> None:
         """Test model property delegates to wrapped."""
@@ -368,6 +397,74 @@ class TestMiddlewareAgentOverride:
             assert middleware_agent.name == "overridden"
 
         assert middleware_agent.name == "original"
+
+
+class TestMiddlewareAgentWithContext:
+    """Tests for MiddlewareAgent with context sharing."""
+
+    async def test_run_with_context_sets_metadata(self) -> None:
+        """Test that run with context sets metadata."""
+        model = TestModel()
+        model.custom_output_text = "response"
+
+        agent = Agent(model, output_type=str)
+        ctx = MiddlewareContext(config={"test_key": "test_value"})
+        logging_mw = LoggingMiddleware()
+        middleware_agent = MiddlewareAgent(agent, middleware=[logging_mw], context=ctx)
+
+        result = await middleware_agent.run("test prompt")
+
+        assert result.output == "response"
+        # Verify metadata was set
+        assert ctx.metadata["user_prompt"] == "test prompt"
+        assert "transformed_prompt" in ctx.metadata
+        assert "final_output" in ctx.metadata
+
+    async def test_run_with_context_provides_config(self) -> None:
+        """Test that middleware can access config via context."""
+
+        class ConfigAwareMiddleware(AgentMiddleware[None]):
+            def __init__(self) -> None:
+                self.config_value: Any = None
+
+            async def before_run(
+                self,
+                prompt: str | Sequence[Any],
+                deps: None,
+                ctx: ScopedContext | None = None,
+            ) -> str | Sequence[Any]:
+                if ctx:
+                    self.config_value = ctx.config.get("my_setting")
+                return prompt
+
+        model = TestModel()
+        model.custom_output_text = "response"
+
+        agent = Agent(model, output_type=str)
+        ctx = MiddlewareContext(config={"my_setting": 42})
+        config_mw = ConfigAwareMiddleware()
+        middleware_agent = MiddlewareAgent(agent, middleware=[config_mw], context=ctx)
+
+        await middleware_agent.run("test")
+
+        assert config_mw.config_value == 42
+
+    async def test_iter_with_context_sets_metadata(self) -> None:
+        """Test that iter with context sets metadata."""
+        model = TestModel()
+        model.custom_output_text = "response"
+
+        agent = Agent(model, output_type=str)
+        ctx = MiddlewareContext(config={"iter_test": True})
+        logging_mw = LoggingMiddleware()
+        middleware_agent = MiddlewareAgent(agent, middleware=[logging_mw], context=ctx)
+
+        async with middleware_agent.iter("test prompt"):
+            pass
+
+        # Verify metadata was set
+        assert ctx.metadata["user_prompt"] == "test prompt"
+        assert "transformed_prompt" in ctx.metadata
 
 
 class TestMiddlewareAgentAsyncContext:

@@ -21,27 +21,37 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 ### Core Components
 
-**Base Middleware (`pydantic_ai_middleware/base.py`)**
+**Base Middleware (`src/pydantic_ai_middleware/base.py`)**
 - `AgentMiddleware[DepsT]` - Abstract base class for all middleware
-- Lifecycle hooks: `before_run`, `after_run`, `before_model_request`, `before_tool_call`, `after_tool_call`, `on_error`
+- Lifecycle hooks: `before_run`, `after_run`, `before_model_request`, `before_tool_call`, `on_tool_error`, `after_tool_call`, `on_error`
+- `tool_names: set[str] | None` - Filter which tools a middleware handles
+- `timeout: float | None` - Per-middleware timeout for all hooks
 
-**Middleware Agent (`pydantic_ai_middleware/agent.py`)**
+**Middleware Agent (`src/pydantic_ai_middleware/agent.py`)**
 - `MiddlewareAgent` - Wraps an agent and applies middleware
 - Delegates to wrapped agent while intercepting lifecycle events
 
-**Middleware Toolset (`pydantic_ai_middleware/toolset.py`)**
+**Middleware Toolset (`src/pydantic_ai_middleware/toolset.py`)**
 - `MiddlewareToolset` - Wraps a toolset to intercept tool calls
-- Applies `before_tool_call` and `after_tool_call` middleware hooks
+- Applies `before_tool_call`, `on_tool_error`, and `after_tool_call` middleware hooks
+- `permission_handler` - Callback for handling ASK permission decisions
 
-**Decorators (`pydantic_ai_middleware/decorators.py`)**
-- `@before_run`, `@after_run`, etc. - Create middleware from functions
+**Decorators (`src/pydantic_ai_middleware/decorators.py`)**
+- `@before_run`, `@after_run`, `@on_tool_error`, etc. - Create middleware from functions
+- `@before_tool_call(tools={"send_email"})` - Decorator with tool name filtering
 - `_FunctionMiddleware` - Internal class that wraps functions
 
-**Exceptions (`pydantic_ai_middleware/exceptions.py`)**
+**Exceptions (`src/pydantic_ai_middleware/exceptions.py`)**
 - `MiddlewareError` - Base exception
 - `InputBlocked` - Block input processing
 - `ToolBlocked` - Block tool execution
 - `OutputBlocked` - Block output
+- `MiddlewareTimeout` - Hook exceeded timeout
+
+**Permissions (`src/pydantic_ai_middleware/permissions.py`)**
+- `ToolDecision` - Enum: ALLOW, DENY, ASK
+- `ToolPermissionResult` - Structured result from before_tool_call
+- `PermissionHandler` - Callback type for ASK decisions
 
 ### Key Design Patterns
 

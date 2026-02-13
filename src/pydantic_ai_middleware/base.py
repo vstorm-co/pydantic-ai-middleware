@@ -4,9 +4,13 @@ from __future__ import annotations
 
 from abc import ABC
 from collections.abc import Sequence
-from typing import Any, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 from pydantic_ai.messages import ModelMessage
+
+if TYPE_CHECKING:
+    from .context import ScopedContext
+    from .permissions import ToolPermissionResult
 
 DepsT = TypeVar("DepsT")
 OutputT = TypeVar("OutputT")
@@ -18,18 +22,42 @@ class AgentMiddleware(ABC, Generic[DepsT]):
     Inherit and override only the methods you need.
     Middleware hooks are called in order for before_* methods
     and in reverse order for after_* methods.
+
+    Attributes:
+        tool_names: Set of tool names this middleware applies to.
+            If None (default), the middleware applies to all tools.
+        timeout: Maximum time in seconds for any hook call.
+            If None (default), no timeout is enforced.
     """
+
+    tool_names: set[str] | None = None
+    timeout: float | None = None
+
+    def _should_handle_tool(self, tool_name: str) -> bool:
+        """Check if this middleware should handle the given tool.
+
+        Args:
+            tool_name: The name of the tool to check.
+
+        Returns:
+            True if the middleware should handle this tool.
+        """
+        if self.tool_names is None:
+            return True
+        return tool_name in self.tool_names
 
     async def before_run(
         self,
         prompt: str | Sequence[Any],
         deps: DepsT | None,
+        ctx: ScopedContext | None = None,
     ) -> str | Sequence[Any]:
         """Called before the agent runs.
 
         Args:
             prompt: The user prompt.
             deps: The agent dependencies.
+            ctx: Scoped context for data sharing (write: before_run, read: config/metadata).
 
         Returns:
             The (possibly modified) prompt.
@@ -44,6 +72,7 @@ class AgentMiddleware(ABC, Generic[DepsT]):
         prompt: str | Sequence[Any],
         output: Any,
         deps: DepsT | None,
+        ctx: ScopedContext | None = None,
     ) -> Any:
         """Called after the agent finishes.
 
@@ -51,6 +80,7 @@ class AgentMiddleware(ABC, Generic[DepsT]):
             prompt: The original user prompt.
             output: The agent output.
             deps: The agent dependencies.
+            ctx: Scoped context for data sharing (write: after_run, read: all previous).
 
         Returns:
             The (possibly modified) output.
@@ -61,12 +91,14 @@ class AgentMiddleware(ABC, Generic[DepsT]):
         self,
         messages: list[ModelMessage],
         deps: DepsT | None,
+        ctx: ScopedContext | None = None,
     ) -> list[ModelMessage]:
         """Called before each model request.
 
         Args:
             messages: The messages to send to the model.
             deps: The agent dependencies.
+            ctx: Scoped context for data sharing (write: before_model_request, read: before_run).
 
         Returns:
             The (possibly modified) messages.
@@ -78,21 +110,50 @@ class AgentMiddleware(ABC, Generic[DepsT]):
         tool_name: str,
         tool_args: dict[str, Any],
         deps: DepsT | None,
-    ) -> dict[str, Any]:
+        ctx: ScopedContext | None = None,
+    ) -> dict[str, Any] | ToolPermissionResult:
         """Called before a tool is called.
 
         Args:
             tool_name: The name of the tool being called.
             tool_args: The arguments to the tool.
             deps: The agent dependencies.
+            ctx: Scoped context for data sharing
+                (write: before_tool_call, read: before_run, before_model_request).
 
         Returns:
-            The (possibly modified) tool arguments.
+            The (possibly modified) tool arguments, or a ToolPermissionResult
+            for structured permission decisions.
 
         Raises:
             ToolBlocked: To block the tool call.
         """
         return tool_args
+
+    async def on_tool_error(
+        self,
+        tool_name: str,
+        tool_args: dict[str, Any],
+        error: Exception,
+        deps: DepsT | None,
+        ctx: ScopedContext | None = None,
+    ) -> Exception | None:
+        """Called when a tool execution raises an error.
+
+        This hook provides tool-specific error context (tool_name, tool_args)
+        that is not available in the generic on_error hook.
+
+        Args:
+            tool_name: The name of the tool that failed.
+            tool_args: The arguments that were passed to the tool.
+            error: The exception raised by the tool.
+            deps: The agent dependencies.
+            ctx: Scoped context for data sharing (write: on_tool_error, read: all hooks).
+
+        Returns:
+            A different exception to raise, or None to re-raise the original.
+        """
+        return None
 
     async def after_tool_call(
         self,
@@ -100,6 +161,7 @@ class AgentMiddleware(ABC, Generic[DepsT]):
         tool_args: dict[str, Any],
         result: Any,
         deps: DepsT | None,
+        ctx: ScopedContext | None = None,
     ) -> Any:
         """Called after a tool is called.
 
@@ -108,6 +170,7 @@ class AgentMiddleware(ABC, Generic[DepsT]):
             tool_args: The arguments that were passed to the tool.
             result: The result from the tool.
             deps: The agent dependencies.
+            ctx: Scoped context for data sharing (write: after_tool_call, read: all before_* hooks).
 
         Returns:
             The (possibly modified) result.
@@ -118,12 +181,14 @@ class AgentMiddleware(ABC, Generic[DepsT]):
         self,
         error: Exception,
         deps: DepsT | None,
+        ctx: ScopedContext | None = None,
     ) -> Exception | None:
         """Called when an error occurs.
 
         Args:
             error: The exception that occurred.
             deps: The agent dependencies.
+            ctx: Scoped context for data sharing (write: on_error, read: all hooks).
 
         Returns:
             A different exception to raise, or None to re-raise the original.

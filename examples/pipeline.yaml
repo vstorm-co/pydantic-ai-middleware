@@ -1,0 +1,34 @@
+# Demonstrates all pipeline skeleton nodes: type, chain, parallel, when.
+
+# 1) parallel: run independent before_run hooks concurrently
+- parallel:
+    strategy: all_must_pass
+    middleware:
+      - type: log_to_ctx
+        config:
+          key: original_prompt
+      - type: prefix_prompt
+        config:
+          prefix: "[P] "
+
+# 2) when: branch on a registered predicate
+- when:
+    predicate: is_admin
+    then:
+      - chain:
+          - type: tag_output
+            config:
+              tag: ADMIN
+          - type: tag_output
+            config:
+              tag: THEN
+    else:
+      - type: tag_output
+        config:
+          tag: USER
+
+# 3) chain: sequential post-processing
+- chain:
+    - type: tag_output
+      config:
+        tag: END

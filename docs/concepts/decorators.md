@@ -17,12 +17,12 @@ For simple middleware, use decorator functions instead of classes.
 from pydantic_ai_middleware import before_run, after_run
 
 @before_run
-async def log_input(prompt, deps):
+async def log_input(prompt, deps, ctx):
     print(f"Input: {prompt}")
     return prompt
 
 @after_run
-async def log_output(prompt, output, deps):
+async def log_output(prompt, output, deps, ctx):
     print(f"Output: {output}")
     return output
 
@@ -38,11 +38,14 @@ agent = MiddlewareAgent(
 ```python
 from collections.abc import Sequence
 from typing import Any
+from pydantic_ai_middleware.context import ScopedContext
 
 @before_run
 async def typed_middleware(
     prompt: str | Sequence[Any],
-    deps: MyDeps | None
+    deps: MyDeps | None,
+    *,
+    ctx: ScopedContext | None = None
 ) -> str | Sequence[Any]:
     if deps:
         return f"[{deps.user}] {prompt}"
@@ -55,7 +58,7 @@ async def typed_middleware(
 from pydantic_ai_middleware import before_run, InputBlocked
 
 @before_run
-async def block_bad_words(prompt, deps):
+async def block_bad_words(prompt, deps, ctx):
     if "bad" in prompt.lower():
         raise InputBlocked("Bad word detected")
     return prompt

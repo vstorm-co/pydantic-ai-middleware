@@ -10,7 +10,12 @@ import pytest
 from pydantic_ai import RunContext
 from pydantic_ai.toolsets.abstract import AbstractToolset, ToolsetTool
 
-from pydantic_ai_middleware import AgentMiddleware, MiddlewareToolset, ToolBlocked
+from pydantic_ai_middleware import (
+    AgentMiddleware,
+    MiddlewareToolset,
+    ScopedContext,
+    ToolBlocked,
+)
 
 
 @dataclass
@@ -74,13 +79,22 @@ class LoggingMiddleware(AgentMiddleware[None]):
         self.after_calls: list[tuple[str, Any]] = []
 
     async def before_tool_call(
-        self, tool_name: str, tool_args: dict[str, Any], deps: None
+        self,
+        tool_name: str,
+        tool_args: dict[str, Any],
+        deps: None,
+        ctx: ScopedContext | None = None,
     ) -> dict[str, Any]:
         self.before_calls.append((tool_name, tool_args.copy()))
         return tool_args
 
     async def after_tool_call(
-        self, tool_name: str, tool_args: dict[str, Any], result: Any, deps: None
+        self,
+        tool_name: str,
+        tool_args: dict[str, Any],
+        result: Any,
+        deps: None,
+        ctx: ScopedContext | None = None,
     ) -> Any:
         self.after_calls.append((tool_name, result))
         return result
@@ -90,12 +104,21 @@ class ModifyingMiddleware(AgentMiddleware[None]):
     """Middleware that modifies tool args and results."""
 
     async def before_tool_call(
-        self, tool_name: str, tool_args: dict[str, Any], deps: None
+        self,
+        tool_name: str,
+        tool_args: dict[str, Any],
+        deps: None,
+        ctx: ScopedContext | None = None,
     ) -> dict[str, Any]:
         return {**tool_args, "added_before": True}
 
     async def after_tool_call(
-        self, tool_name: str, tool_args: dict[str, Any], result: Any, deps: None
+        self,
+        tool_name: str,
+        tool_args: dict[str, Any],
+        result: Any,
+        deps: None,
+        ctx: ScopedContext | None = None,
     ) -> Any:
         return {"original": result, "modified_after": True}
 
@@ -107,7 +130,11 @@ class BlockingMiddleware(AgentMiddleware[None]):
         self.blocked_tools = blocked_tools
 
     async def before_tool_call(
-        self, tool_name: str, tool_args: dict[str, Any], deps: None
+        self,
+        tool_name: str,
+        tool_args: dict[str, Any],
+        deps: None,
+        ctx: ScopedContext | None = None,
     ) -> dict[str, Any]:
         if tool_name in self.blocked_tools:
             raise ToolBlocked(tool_name, "Tool is blocked")
@@ -186,13 +213,22 @@ class TestMiddlewareToolset:
                 self.order = order
 
             async def before_tool_call(
-                self, tool_name: str, tool_args: dict[str, Any], deps: None
+                self,
+                tool_name: str,
+                tool_args: dict[str, Any],
+                deps: None,
+                ctx: ScopedContext | None = None,
             ) -> dict[str, Any]:
                 self.order.append(f"before_{self.name}")
                 return tool_args
 
             async def after_tool_call(
-                self, tool_name: str, tool_args: dict[str, Any], result: Any, deps: None
+                self,
+                tool_name: str,
+                tool_args: dict[str, Any],
+                result: Any,
+                deps: None,
+                ctx: ScopedContext | None = None,
             ) -> Any:
                 self.order.append(f"after_{self.name}")
                 return result

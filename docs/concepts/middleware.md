@@ -10,7 +10,7 @@ Create middleware by inheriting from `AgentMiddleware`:
 from pydantic_ai_middleware import AgentMiddleware
 
 class MyMiddleware(AgentMiddleware[None]):
-    async def before_run(self, prompt, deps):
+    async def before_run(self, prompt, deps, ctx):
         # Your logic here
         return prompt
 ```
@@ -28,7 +28,8 @@ class MyDeps:
     is_admin: bool
 
 class AuthMiddleware(AgentMiddleware[MyDeps]):
-    async def before_tool_call(self, tool_name, tool_args, deps):
+    async def before_tool_call(
+        self, tool_name, tool_args, deps, ctx):
         if tool_name == "admin_tool" and not deps.is_admin:
             raise ToolBlocked(tool_name, "Admin only")
         return tool_args
@@ -54,17 +55,34 @@ agent = MiddlewareAgent(
 
 This is similar to how ASGI/WSGI middleware works.
 
+## Composing with MiddlewareChain
+
+Group related middleware into reusable chains:
+
+```python
+from pydantic_ai_middleware import MiddlewareChain
+
+validation = MiddlewareChain([mw1, mw2], name="Validation")
+
+agent = MiddlewareAgent(
+    agent=base_agent,
+    middleware=[validation, mw3],
+)
+```
+
+Chains can be nested and are flattened in order so execution stays predictable.
+
 ## Modifying Data
 
 Middleware can modify data at each stage:
 
 ```python
 class TransformMiddleware(AgentMiddleware[None]):
-    async def before_run(self, prompt, deps):
+    async def before_run(self, prompt, deps, ctx):
         # Modify the prompt
         return f"[Context] {prompt}"
 
-    async def after_run(self, prompt, output, deps):
+    async def after_run(self, prompt, output, deps, ctx):
         # Modify the output
         return {"original": output, "processed": True}
 ```
@@ -77,12 +95,14 @@ Block execution by raising exceptions:
 from pydantic_ai_middleware import InputBlocked, ToolBlocked
 
 class SecurityMiddleware(AgentMiddleware[None]):
-    async def before_run(self, prompt, deps):
+    async def before_run(self, prompt, deps, ctx):
         if is_malicious(prompt):
             raise InputBlocked("Malicious content detected")
         return prompt
 
-    async def before_tool_call(self, tool_name, tool_args, deps):
+    async def before_tool_call(
+        self, tool_name, tool_args, deps, ctx
+    ):
         if tool_name in BLOCKED_TOOLS:
             raise ToolBlocked(tool_name, "Tool not allowed")
         return tool_args
@@ -94,7 +114,7 @@ Handle errors with the `on_error` hook:
 
 ```python
 class ErrorHandler(AgentMiddleware[None]):
-    async def on_error(self, error, deps):
+    async def on_error(self, error, deps, ctx):
         # Log the error
         logger.error(f"Agent error: {error}")
 

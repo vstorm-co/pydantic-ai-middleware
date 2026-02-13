@@ -17,7 +17,7 @@ class RateLimiter(AgentMiddleware[None]):
         self.window = window
         self._calls: list[float] = []
 
-    async def before_run(self, prompt, deps):
+    async def before_run(self, prompt, deps, ctx):
         now = time.time()
 
         # Remove old calls outside the window
@@ -48,7 +48,7 @@ class PerUserRateLimiter(AgentMiddleware[UserDeps]):
         self.window = window
         self._user_calls: dict[str, list[float]] = defaultdict(list)
 
-    async def before_run(self, prompt, deps):
+    async def before_run(self, prompt, deps, ctx):
         now = time.time()
         user_id = deps.user_id
 
@@ -78,7 +78,7 @@ class TokenBucket(AgentMiddleware[None]):
         self._last_update = time.time()
         self._lock = asyncio.Lock()
 
-    async def before_run(self, prompt, deps):
+    async def before_run(self, prompt, deps, ctx):
         async with self._lock:
             now = time.time()
             elapsed = now - self._last_update
@@ -112,7 +112,9 @@ class ToolRateLimiter(AgentMiddleware[None]):
         }
         self.default_limit = (50, 60)
 
-    async def before_tool_call(self, tool_name, tool_args, deps):
+    async def before_tool_call(
+        self, tool_name, tool_args, deps, ctx
+    ):
         max_calls, window = self.limits.get(tool_name, self.default_limit)
         now = time.time()
 

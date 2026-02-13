@@ -9,9 +9,40 @@ pydantic-ai-middleware provides hooks at various points in the agent execution l
 | `before_run` | Before agent starts | Prompt | Yes (`InputBlocked`) |
 | `after_run` | After agent finishes | Output | Yes (`OutputBlocked`) |
 | `before_model_request` | Before each model call | Messages | No |
-| `before_tool_call` | Before tool execution | Tool arguments | Yes (`ToolBlocked`) |
+| `before_tool_call` | Before tool execution | Tool arguments | Yes (`ToolBlocked` / `ToolPermissionResult`) |
+| `on_tool_error` | When a tool raises | Exception | Can replace |
 | `after_tool_call` | After tool execution | Tool result | No |
 | `on_error` | When error occurs | Exception | Can convert |
+
+## Hook Execution Order
+
+Hooks execute in a specific order, which matters for context sharing:
+
+1. **BEFORE_RUN** (1) - Initial input processing
+2. **BEFORE_MODEL_REQUEST** (2) - Before sending to model
+3. **BEFORE_TOOL_CALL** (3) - Before tool execution
+4. **ON_TOOL_ERROR** (4) - When a tool raises an exception (can read all hooks)
+5. **AFTER_TOOL_CALL** (5) - After tool execution
+6. **AFTER_RUN** (6) - Final output processing
+7. **ON_ERROR** (7) - Error handling (can read all hooks)
+
+## Context Parameter
+
+All hooks receive an optional `ctx` parameter for sharing data:
+
+```python
+from pydantic_ai_middleware import ScopedContext
+
+async def before_run(
+    self,
+    prompt: str | Sequence[Any],
+    deps: DepsT | None,
+    ctx: ScopedContext | None = None,
+) -> str | Sequence[Any]:
+    if ctx:
+        ctx.set("start_time", time.time())  # Store data
+    return prompt
+```
 
 ## before_run
 
@@ -22,6 +53,7 @@ async def before_run(
     self,
     prompt: str | Sequence[Any],
     deps: DepsT | None,
+    ctx: ScopedContext | None = None,
 ) -> str | Sequence[Any]:
     # Return modified prompt
     return prompt
@@ -37,6 +69,7 @@ async def after_run(
     prompt: str | Sequence[Any],
     output: Any,
     deps: DepsT | None,
+    ctx: ScopedContext | None = None,
 ) -> Any:
     # Return modified output
     return output
@@ -51,6 +84,7 @@ async def before_model_request(
     self,
     messages: list[ModelMessage],
     deps: DepsT | None,
+    ctx: ScopedContext | None = None,
 ) -> list[ModelMessage]:
     # Return modified messages
     return messages
@@ -58,7 +92,7 @@ async def before_model_request(
 
 ## before_tool_call
 
-Called before a tool is executed. Can modify arguments or block.
+Called before a tool is executed. Can modify arguments, block, or return a structured permission decision.
 
 ```python
 async def before_tool_call(
@@ -66,9 +100,28 @@ async def before_tool_call(
     tool_name: str,
     tool_args: dict[str, Any],
     deps: DepsT | None,
-) -> dict[str, Any]:
-    # Return modified arguments
+    ctx: ScopedContext | None = None,
+) -> dict[str, Any] | ToolPermissionResult:
+    # Return modified arguments (dict) or ToolPermissionResult
     return tool_args
+```
+
+## on_tool_error
+
+Called when a tool raises an exception. Can replace the exception or return `None` to re-raise.
+
+```python
+async def on_tool_error(
+    self,
+    tool_name: str,
+    tool_args: dict[str, Any],
+    error: Exception,
+    deps: DepsT | None,
+    ctx: ScopedContext | None = None,
+) -> Exception | None:
+    # Return None to re-raise original
+    # Return exception to raise different one
+    return None
 ```
 
 ## after_tool_call
@@ -82,6 +135,7 @@ async def after_tool_call(
     tool_args: dict[str, Any],
     result: Any,
     deps: DepsT | None,
+    ctx: ScopedContext | None = None,
 ) -> Any:
     # Return modified result
     return result
@@ -96,8 +150,75 @@ async def on_error(
     self,
     error: Exception,
     deps: DepsT | None,
+    ctx: ScopedContext | None = None,
 ) -> Exception | None:
     # Return None to re-raise original
     # Return exception to raise different one
     return None
+```
+
+## Context Sharing
+
+Middleware can share data through the context system. Each hook has its own namespace, and hooks can read from earlier hooks in the execution chain.
+
+### Storing Data
+
+```python
+async def before_run(self, prompt, deps, ctx: ScopedContext | None = None):
+    if ctx:
+        ctx.set("user_id", "123")  # Stored in BEFORE_RUN namespace
+        ctx.set("timestamp", time.time())
+    return prompt
+```
+
+### Reading Data from Earlier Hooks
+
+```python
+from pydantic_ai_middleware import HookType
+
+async def after_run(self, prompt, output, deps, ctx: ScopedContext | None = None):
+    if ctx:
+        # Read from BEFORE_RUN namespace
+        user_id = ctx.get_from(HookType.BEFORE_RUN, "user_id")
+        timestamp = ctx.get_from(HookType.BEFORE_RUN, "timestamp")
+
+        elapsed = time.time() - timestamp
+        print(f"User {user_id} request took {elapsed:.2f}s")
+    return output
+```
+
+### Access Control Rules
+
+- Hooks can only **write** to their own namespace
+- Hooks can **read** from earlier hooks (lower number in execution order)
+- Hooks **cannot read** from later hooks
+- `ON_ERROR` can read from **all** hooks
+
+```python
+# ✓ AFTER_RUN can read from BEFORE_RUN
+after_ctx.get_from(HookType.BEFORE_RUN, "key")
+
+# ✗ BEFORE_RUN cannot read from AFTER_RUN (raises ContextAccessError)
+before_ctx.get_from(HookType.AFTER_RUN, "key")
+```
+
+### Accessing Global Config
+
+```python
+async def before_run(self, prompt, deps, ctx: ScopedContext | None = None):
+    if ctx:
+        timeout = ctx.config.get("timeout", 30)
+        debug = ctx.config.get("debug", False)
+        if debug:
+            print(f"Processing with timeout={timeout}")
+    return prompt
+
+# Config is set when creating the context
+ctx = MiddlewareContext(config={"timeout": 60, "debug": True})
+
+agent = MiddlewareAgent(
+    agent=base_agent,
+    middleware=[...],
+    context=ctx,
+)
 ```
