@@ -10,8 +10,12 @@ from typing import Any
 from pydantic_ai import messages as _messages
 from pydantic_ai import models
 from pydantic_ai import usage as _usage
-from pydantic_ai.agent import AgentMetadata
-from pydantic_ai.agent.abstract import AbstractAgent, EventStreamHandler, Instructions
+from pydantic_ai.agent.abstract import (
+    AbstractAgent,
+    AgentMetadata,
+    EventStreamHandler,
+    Instructions,
+)
 from pydantic_ai.builtin_tools import AbstractBuiltinTool
 from pydantic_ai.output import OutputDataT, OutputSpec
 from pydantic_ai.run import AgentRun, AgentRunResult

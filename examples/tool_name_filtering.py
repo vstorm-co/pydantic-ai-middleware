@@ -16,7 +16,6 @@ from pydantic_ai_middleware import (
     before_tool_call,
 )
 
-
 # --- Class-based approach ---
 
 

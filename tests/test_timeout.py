@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 from typing import Any
 
 import pytest
@@ -13,11 +13,9 @@ from pydantic_ai.toolsets.abstract import AbstractToolset, ToolsetTool
 from pydantic_ai_middleware import (
     AgentMiddleware,
     MiddlewareToolset,
-    ScopedContext,
 )
 from pydantic_ai_middleware._timeout import call_with_timeout
 from pydantic_ai_middleware.exceptions import MiddlewareTimeout
-
 
 # --- Test helpers ---
 

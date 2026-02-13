@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-import pytest
 from pydantic_ai._run_context import RunContext
 from pydantic_ai.toolsets.abstract import AbstractToolset, ToolsetTool
 
@@ -16,14 +15,12 @@ from pydantic_ai_middleware import (
     MiddlewareToolset,
     ParallelMiddleware,
     ScopedContext,
-    ToolBlocked,
     ToolDecision,
     ToolPermissionResult,
     after_tool_call,
     before_tool_call,
     on_tool_error,
 )
-
 
 # --- Test helpers ---
 

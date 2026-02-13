@@ -118,7 +118,8 @@ class AgentMiddleware(ABC, Generic[DepsT]):
             tool_name: The name of the tool being called.
             tool_args: The arguments to the tool.
             deps: The agent dependencies.
-            ctx: Scoped context for data sharing (write: before_tool_call, read: before_run, before_model_request).
+            ctx: Scoped context for data sharing
+                (write: before_tool_call, read: before_run, before_model_request).
 
         Returns:
             The (possibly modified) tool arguments, or a ToolPermissionResult

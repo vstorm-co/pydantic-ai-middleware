@@ -16,7 +16,6 @@ from pydantic_ai_middleware import (
     ToolPermissionResult,
 )
 
-
 # --- File access control ---
 
 
@@ -109,7 +108,7 @@ async def cli_approval(
     reason: str,
 ) -> bool:
     """Simple approval callback (for use with ASK decisions)."""
-    print(f"\n--- Permission Required ---")
+    print("\n--- Permission Required ---")
     print(f"Tool: {tool_name}")
     print(f"Args: {tool_args}")
     print(f"Reason: {reason}")

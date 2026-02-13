@@ -12,7 +12,6 @@ from pydantic_ai.toolsets.abstract import AbstractToolset, ToolsetTool
 from pydantic_ai_middleware import (
     AgentMiddleware,
     MiddlewareToolset,
-    ScopedContext,
     ToolBlocked,
     ToolDecision,
     ToolPermissionResult,

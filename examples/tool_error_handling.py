@@ -10,7 +10,6 @@ from typing import Any
 
 from pydantic_ai_middleware import AgentMiddleware, ScopedContext, on_tool_error
 
-
 # --- Class-based approach ---
 
 
