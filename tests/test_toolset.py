@@ -199,10 +199,11 @@ class TestMiddlewareToolset:
         ctx = create_mock_context()
         tool = MockToolsetTool(name="dangerous_tool")
 
-        with pytest.raises(ToolBlocked) as exc_info:
-            await toolset.call_tool("dangerous_tool", {}, ctx, tool)  # type: ignore
-
-        assert exc_info.value.tool_name == "dangerous_tool"
+        # ToolBlocked is caught in call_tool and returned as a string
+        # (so pydantic-ai treats it as a normal tool result, not an exception)
+        result = await toolset.call_tool("dangerous_tool", {}, ctx, tool)  # type: ignore
+        assert "blocked" in str(result).lower()
+        assert "dangerous_tool" in str(result)
 
     async def test_call_tool_multiple_middleware_order(self) -> None:
         """Test that middleware is applied in correct order."""

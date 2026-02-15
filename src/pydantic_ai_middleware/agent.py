@@ -24,14 +24,44 @@ from pydantic_ai.tools import (
     AgentDepsT,
     BuiltinToolFunc,
     DeferredToolResults,
+    RunContext,
 )
 from pydantic_ai.toolsets import AbstractToolset
 
 from ._timeout import call_with_timeout
 from .base import AgentMiddleware
-from .context import HookType, MiddlewareContext
+from .context import HookType, MiddlewareContext, ScopedContext
 from .permissions import PermissionHandler
 from .toolset import MiddlewareToolset
+
+
+def _create_bmr_processor(
+    middleware: list[AgentMiddleware[Any]],
+    ctx: MiddlewareContext | None,
+) -> Any:
+    """Create a history processor that bridges to before_model_request middleware.
+
+    pydantic-ai calls history processors in ``ModelRequestNode._prepare_request()``
+    before every model request — both in ``run()`` and ``iter()`` mode.  We use this
+    to invoke the ``before_model_request`` hook on each middleware.
+    """
+    bmr_ctx: ScopedContext | None = ctx.for_hook(HookType.BEFORE_MODEL_REQUEST) if ctx else None
+
+    async def _processor(
+        run_context: RunContext[Any], messages: list[_messages.ModelMessage]
+    ) -> list[_messages.ModelMessage]:
+        current = messages
+        for mw in middleware:
+            mw_name = type(mw).__name__
+            current = await call_with_timeout(
+                mw.before_model_request(current, run_context.deps, bmr_ctx),
+                mw.timeout,
+                mw_name,
+                "before_model_request",
+            )
+        return current
+
+    return _processor
 
 
 class MiddlewareAgent(AbstractAgent[AgentDepsT, OutputDataT]):
@@ -181,37 +211,54 @@ class MiddlewareAgent(AbstractAgent[AgentDepsT, OutputDataT]):
             if ctx:
                 ctx.set_metadata("transformed_prompt", current_prompt)
 
-            # Wrap toolsets with middleware
+            # Wrap toolsets with middleware — always wrap all toolsets
+            # (both the agent's own + any explicitly passed) so middleware
+            # intercepts every tool call.
+            all_toolsets = list(toolsets) if toolsets else list(self._wrapped.toolsets)
             middleware_toolsets: list[AbstractToolset[AgentDepsT]] = []
-            if toolsets:
-                for ts in toolsets:
-                    middleware_toolsets.append(
-                        MiddlewareToolset(
-                            wrapped=ts,
-                            middleware=self._middleware,
-                            ctx=ctx,
-                            permission_handler=self._permission_handler,
-                        )
+            for ts in all_toolsets:
+                middleware_toolsets.append(
+                    MiddlewareToolset(
+                        wrapped=ts,
+                        middleware=self._middleware,
+                        ctx=ctx,
+                        permission_handler=self._permission_handler,
                     )
+                )
 
-            # Run the wrapped agent
-            result = await self._wrapped.run(
-                current_prompt,
-                output_type=output_type,
-                message_history=message_history,
-                deferred_tool_results=deferred_tool_results,
-                model=model,
-                instructions=instructions,
-                deps=deps,
-                model_settings=model_settings,
-                usage_limits=usage_limits,
-                usage=usage,
-                metadata=metadata,
-                infer_name=infer_name,
-                toolsets=middleware_toolsets if middleware_toolsets else None,
-                builtin_tools=builtin_tools,
-                event_stream_handler=event_stream_handler,
-            )
+            # Inject before_model_request middleware as a history processor.
+            # pydantic-ai calls history processors before every model request,
+            # which is exactly the hook point we need.
+            bmr_processor = _create_bmr_processor(self._middleware, ctx)
+            original_processors = getattr(self._wrapped, "history_processors", [])
+            self._wrapped.history_processors = list(original_processors) + [bmr_processor]  # type: ignore[union-attr]
+
+            try:
+                # Use override() to REPLACE the agent's toolsets (not add to them),
+                # then call run() without passing toolsets= to avoid duplicates.
+                with self._wrapped.override(toolsets=middleware_toolsets):
+                    result = await self._wrapped.run(
+                        current_prompt,
+                        output_type=output_type,
+                        message_history=message_history,
+                        deferred_tool_results=deferred_tool_results,
+                        model=model,
+                        instructions=instructions,
+                        deps=deps,
+                        model_settings=model_settings,
+                        usage_limits=usage_limits,
+                        usage=usage,
+                        metadata=metadata,
+                        infer_name=infer_name,
+                        builtin_tools=builtin_tools,
+                        event_stream_handler=event_stream_handler,
+                    )
+            finally:
+                self._wrapped.history_processors = original_processors  # type: ignore[union-attr]
+
+            # Store run usage in metadata for middleware access (e.g. cost tracking)
+            if ctx:
+                ctx.set_metadata("run_usage", result.usage())
 
             # Apply after_run middleware (in reverse order, with timeout)
             output = result.output
@@ -295,36 +342,48 @@ class MiddlewareAgent(AbstractAgent[AgentDepsT, OutputDataT]):
         if ctx:
             ctx.set_metadata("transformed_prompt", current_prompt)
 
-        # Wrap toolsets with middleware
+        # Wrap toolsets with middleware — always wrap all toolsets
+        # (both the agent's own + any explicitly passed) so middleware
+        # intercepts every tool call.
+        all_toolsets = list(toolsets) if toolsets else list(self._wrapped.toolsets)
         middleware_toolsets: list[AbstractToolset[AgentDepsT]] = []
-        if toolsets:
-            for ts in toolsets:
-                middleware_toolsets.append(
-                    MiddlewareToolset(
-                        wrapped=ts,
-                        middleware=self._middleware,
-                        ctx=ctx,
-                        permission_handler=self._permission_handler,
-                    )
+        for ts in all_toolsets:
+            middleware_toolsets.append(
+                MiddlewareToolset(
+                    wrapped=ts,
+                    middleware=self._middleware,
+                    ctx=ctx,
+                    permission_handler=self._permission_handler,
                 )
+            )
 
-        async with self._wrapped.iter(
-            user_prompt=current_prompt,
-            output_type=output_type,
-            message_history=message_history,
-            deferred_tool_results=deferred_tool_results,
-            model=model,
-            instructions=instructions,
-            deps=deps,
-            model_settings=model_settings,
-            usage_limits=usage_limits,
-            usage=usage,
-            metadata=metadata,
-            infer_name=infer_name,
-            toolsets=middleware_toolsets if middleware_toolsets else None,
-            builtin_tools=builtin_tools,
-        ) as run:
-            yield run
+        # Inject before_model_request middleware as a history processor.
+        bmr_processor = _create_bmr_processor(self._middleware, ctx)
+        original_processors = getattr(self._wrapped, "history_processors", [])
+        self._wrapped.history_processors = list(original_processors) + [bmr_processor]  # type: ignore[union-attr]
+
+        try:
+            # Use override() to REPLACE the agent's toolsets (not add to them),
+            # then call iter() without passing toolsets= to avoid duplicates.
+            with self._wrapped.override(toolsets=middleware_toolsets):
+                async with self._wrapped.iter(
+                    user_prompt=current_prompt,
+                    output_type=output_type,
+                    message_history=message_history,
+                    deferred_tool_results=deferred_tool_results,
+                    model=model,
+                    instructions=instructions,
+                    deps=deps,
+                    model_settings=model_settings,
+                    usage_limits=usage_limits,
+                    usage=usage,
+                    metadata=metadata,
+                    infer_name=infer_name,
+                    builtin_tools=builtin_tools,
+                ) as run:
+                    yield run
+        finally:
+            self._wrapped.history_processors = original_processors  # type: ignore[union-attr]
 
     @contextmanager
     def override(self, **kwargs: Any) -> Iterator[None]:

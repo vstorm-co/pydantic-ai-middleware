@@ -18,6 +18,12 @@ from .builder import (
 )
 from .chain import MiddlewareChain
 from .conditional import ConditionalMiddleware
+from .cost_tracking import (
+    CostCallback,
+    CostInfo,
+    CostTrackingMiddleware,
+    create_cost_tracking_middleware,
+)
 from .config_loaders import (
     load_middleware_config_path,
     load_middleware_config_text,
@@ -41,6 +47,7 @@ from .decorators import (
 )
 from .exceptions import (
     AggregationFailed,
+    BudgetExceededError,
     GuardrailTimeout,
     InputBlocked,
     MiddlewareConfigError,
@@ -87,6 +94,11 @@ __all__ = [
     # Parallel execution
     "ParallelMiddleware",
     "AsyncGuardrailMiddleware",
+    # Cost tracking
+    "CostTrackingMiddleware",
+    "CostInfo",
+    "CostCallback",
+    "create_cost_tracking_middleware",
     # Composition helpers
     "ConditionalMiddleware",
     "AggregationStrategy",
@@ -106,6 +118,7 @@ __all__ = [
     # Exceptions
     "MiddlewareError",
     "MiddlewareConfigError",
+    "BudgetExceededError",
     "MiddlewareTimeout",
     "InputBlocked",
     "ToolBlocked",

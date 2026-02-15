@@ -96,7 +96,8 @@ pydantic-ai-middleware takes a different approach from traditional guardrails li
 - **Tool Name Filtering** — Scope middleware to specific tools with `tool_names`
 - **Hook Timeouts** — Per-middleware timeout enforcement with `MiddlewareTimeout`
 - **Permission Decisions** — Structured ALLOW/DENY/ASK protocol for tool authorization
-- **Zero Overhead** — No mandatory dependencies beyond pydantic-ai
+- **Cost Tracking** — Automatic token usage and USD cost monitoring with budget limits
+- **Lightweight** — Only requires pydantic-ai and genai-prices
 
 ---
 
@@ -377,6 +378,39 @@ agent = MiddlewareAgent(
 result = await agent.run("Search for the latest Python release notes")
 ```
 
+### Cost Tracking with Budget Limits
+
+```python
+from pydantic_ai import Agent
+from pydantic_ai_middleware import (
+    MiddlewareAgent,
+    MiddlewareContext,
+    CostTrackingMiddleware,
+    create_cost_tracking_middleware,
+)
+
+cost_mw = create_cost_tracking_middleware(
+    model_name="openai:gpt-4.1",
+    budget_limit_usd=5.0,
+    on_cost_update=lambda info: print(
+        f"Run #{info.run_count}: ${info.run_cost_usd:.4f} "
+        f"(total: ${info.total_cost_usd:.4f})"
+    ),
+)
+
+base_agent = Agent("openai:gpt-4.1")
+agent = MiddlewareAgent(
+    agent=base_agent,
+    middleware=[cost_mw],
+    context=MiddlewareContext(),  # required for cost tracking
+)
+
+result = await agent.run("Explain quantum computing")
+# Run #1: $0.0023 (total: $0.0023)
+
+print(f"Total tokens: {cost_mw.total_request_tokens + cost_mw.total_response_tokens}")
+```
+
 ### Middleware Chains + Conditional Routing
 
 ```python
@@ -482,6 +516,7 @@ except MiddlewareTimeout as e:
 | **Audit Logging** | All hooks + context |
 | **Content Moderation** | Parallel + AsyncGuardrail |
 | **A/B Testing** | ConditionalMiddleware |
+| **Cost Tracking** | CostTrackingMiddleware + BudgetExceededError |
 | **Config-Driven Pipelines** | PipelineSpec + Config Loading |
 
 ---

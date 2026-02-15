@@ -420,6 +420,24 @@ class TestMiddlewareAgentWithContext:
         assert "transformed_prompt" in ctx.metadata
         assert "final_output" in ctx.metadata
 
+    async def test_run_with_context_sets_run_usage(self) -> None:
+        """Test that run with context sets run_usage in metadata."""
+        model = TestModel()
+        model.custom_output_text = "response"
+
+        agent = Agent(model, output_type=str)
+        ctx = MiddlewareContext()
+        middleware_agent = MiddlewareAgent(agent, middleware=[], context=ctx)
+
+        await middleware_agent.run("test prompt")
+
+        # run_usage should be set in metadata
+        assert "run_usage" in ctx.metadata
+        run_usage = ctx.metadata["run_usage"]
+        # RunUsage has input_tokens and output_tokens
+        assert hasattr(run_usage, "input_tokens")
+        assert hasattr(run_usage, "output_tokens")
+
     async def test_run_with_context_provides_config(self) -> None:
         """Test that middleware can access config via context."""
 

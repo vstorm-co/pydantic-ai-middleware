@@ -105,6 +105,21 @@ class MiddlewareTimeout(MiddlewareError):
         super().__init__(f"Middleware '{middleware_name}' timed out{detail} after {timeout:.2f}s")
 
 
+class BudgetExceededError(MiddlewareError):
+    """Raised when accumulated cost exceeds the configured budget limit."""
+
+    def __init__(self, cost: float, budget: float) -> None:
+        """Initialize the exception.
+
+        Args:
+            cost: The current accumulated cost in USD.
+            budget: The configured budget limit in USD.
+        """
+        self.cost = cost
+        self.budget = budget
+        super().__init__(f"Budget exceeded: ${cost:.4f} >= ${budget:.4f} limit")
+
+
 class AggregationFailed(MiddlewareError):
     """Raised when parallel results cannot be aggregated.
 
