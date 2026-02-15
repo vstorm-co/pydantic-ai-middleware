@@ -6,7 +6,6 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-import pytest
 from pydantic_ai import RunContext
 from pydantic_ai.toolsets.abstract import AbstractToolset, ToolsetTool
 

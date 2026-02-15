@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Union
 
 from genai_prices import calc_price

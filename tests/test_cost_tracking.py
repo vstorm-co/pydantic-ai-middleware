@@ -19,7 +19,6 @@ from pydantic_ai_middleware import (
     ScopedContext,
 )
 from pydantic_ai_middleware.cost_tracking import (
-    CostCallback,
     CostInfo,
     CostTrackingMiddleware,
     create_cost_tracking_middleware,
