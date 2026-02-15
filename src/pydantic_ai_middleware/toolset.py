@@ -111,19 +111,26 @@ class MiddlewareToolset(WrapperToolset[DepsT], Generic[DepsT]):
         before_tool_ctx = self.ctx.for_hook(HookType.BEFORE_TOOL_CALL) if self.ctx else None
         after_tool_ctx = self.ctx.for_hook(HookType.AFTER_TOOL_CALL) if self.ctx else None
 
-        # Apply before_tool_call middleware (with tool name filtering and timeout)
+        # Apply before_tool_call middleware (with tool name filtering and timeout).
+        # ToolBlocked can be raised either directly by middleware or by
+        # _process_permission_result when a DENY/ASK decision is returned.
+        # We catch it here and return a string so pydantic-ai treats it as a
+        # normal tool result (avoids message ordering issues with retries).
         current_args = tool_args
-        for mw in self.middleware:
-            if not mw._should_handle_tool(name):
-                continue
-            mw_name = type(mw).__name__
-            raw_result = await call_with_timeout(
-                mw.before_tool_call(name, current_args, deps, before_tool_ctx),
-                mw.timeout,
-                mw_name,
-                "before_tool_call",
-            )
-            current_args = await self._process_permission_result(raw_result, name, current_args)
+        try:
+            for mw in self.middleware:
+                if not mw._should_handle_tool(name):
+                    continue
+                mw_name = type(mw).__name__
+                raw_result = await call_with_timeout(
+                    mw.before_tool_call(name, current_args, deps, before_tool_ctx),
+                    mw.timeout,
+                    mw_name,
+                    "before_tool_call",
+                )
+                current_args = await self._process_permission_result(raw_result, name, current_args)
+        except ToolBlocked as e:
+            return f"Tool '{name}' blocked: {e.reason}"
 
         # Execute the tool with on_tool_error handling
         try:

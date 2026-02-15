@@ -232,8 +232,11 @@ class TestPermissionInToolCallFlow:
         ctx = _mock_ctx()
         tool = MockToolsetTool("dangerous")
 
-        with pytest.raises(ToolBlocked, match="Tool is dangerous"):
-            await toolset.call_tool("dangerous", {}, ctx, tool)  # type: ignore
+        # ToolBlocked is caught in call_tool and returned as a string
+        # (so pydantic-ai treats it as a normal tool result, not an exception)
+        result = await toolset.call_tool("dangerous", {}, ctx, tool)  # type: ignore
+        assert "blocked" in str(result).lower()
+        assert "Tool is dangerous" in str(result)
 
     async def test_middleware_returns_permission_ask_with_handler(self) -> None:
         handler_calls: list[tuple[str, dict[str, Any], str]] = []

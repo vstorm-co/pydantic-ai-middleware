@@ -102,6 +102,8 @@ plugins:
           - advanced/on-tool-error.md: Tool error handling hook
           - advanced/hook-timeouts.md: Per-middleware hook timeouts
           - advanced/permission-decisions.md: Permission decision protocol
+          - advanced/cost-tracking.md: Cost tracking middleware
+          - advanced/builder.md: Builder/factory API for middleware pipelines
           - advanced/config-loading.md: JSON/YAML configuration loading
           - advanced/pipeline-spec.md: Pipeline spec builder
         Examples:
@@ -196,6 +198,8 @@ nav:
     - advanced/on-tool-error.md
     - advanced/hook-timeouts.md
     - advanced/permission-decisions.md
+    - advanced/cost-tracking.md
+    - advanced/builder.md
     - advanced/config-loading.md
     - advanced/pipeline-spec.md
   - Examples:
@@ -203,6 +207,7 @@ nav:
     - Getting Started:
       - examples/logging.md
       - examples/rate-limiting.md
+      - examples/cost-tracking.md
     - Security:
       - examples/security.md
       - examples/pii-detection.md

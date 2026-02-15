@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2025-02-15
+
+### Added
+
+- **Cost Tracking Middleware** — `CostTrackingMiddleware` for automatic token usage and USD cost monitoring
+  - Tracks cumulative input/output tokens and USD costs across agent runs
+  - USD cost calculation via `genai-prices` library (supports `"provider:model"` format)
+  - `budget_limit_usd` — enforces cost budget limits, raises `BudgetExceededError` when exceeded
+  - `on_cost_update` callback with `CostInfo` dataclass (supports sync and async)
+  - `reset()` method to clear accumulators
+  - `create_cost_tracking_middleware()` factory function
+- **`BudgetExceededError`** exception for budget limit enforcement
+- `run_usage` metadata — `MiddlewareAgent` now stores `result.usage()` in context metadata after each run, enabling cost tracking and other usage-aware middleware
+
+### Changed
+
+- **`before_model_request` hook** — now invoked via pydantic-ai's history processor mechanism instead of manual message interception. This ensures the hook fires for every model request in both `run()` and `iter()` modes.
+- **Toolset wrapping** — `MiddlewareAgent` now always wraps all toolsets (agent's own + explicitly passed) using `agent.override(toolsets=...)`, preventing duplicate tool registration.
+- **`ToolBlocked` handling** — `MiddlewareToolset` now catches `ToolBlocked` exceptions in `before_tool_call` and returns a descriptive string instead of raising, avoiding message ordering issues with pydantic-ai retries.
+
+### Dependencies
+
+- Added `genai-prices>=0.0.49` as a required dependency (for cost calculation)
+
 ## [0.2.0] - 2025-02-12
 
 ### Added
@@ -131,5 +155,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 100% test coverage
 - Documentation with MkDocs
 
+[0.2.1]: https://github.com/vstorm-co/pydantic-ai-middleware/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/vstorm-co/pydantic-ai-middleware/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/vstorm-co/pydantic-ai-middleware/releases/tag/v0.1.0

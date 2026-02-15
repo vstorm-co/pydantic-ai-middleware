@@ -30,6 +30,12 @@ from .context import (
     MiddlewareContext,
     ScopedContext,
 )
+from .cost_tracking import (
+    CostCallback,
+    CostInfo,
+    CostTrackingMiddleware,
+    create_cost_tracking_middleware,
+)
 from .decorators import (
     after_run,
     after_tool_call,
@@ -41,6 +47,7 @@ from .decorators import (
 )
 from .exceptions import (
     AggregationFailed,
+    BudgetExceededError,
     GuardrailTimeout,
     InputBlocked,
     MiddlewareConfigError,
@@ -87,6 +94,11 @@ __all__ = [
     # Parallel execution
     "ParallelMiddleware",
     "AsyncGuardrailMiddleware",
+    # Cost tracking
+    "CostTrackingMiddleware",
+    "CostInfo",
+    "CostCallback",
+    "create_cost_tracking_middleware",
     # Composition helpers
     "ConditionalMiddleware",
     "AggregationStrategy",
@@ -106,6 +118,7 @@ __all__ = [
     # Exceptions
     "MiddlewareError",
     "MiddlewareConfigError",
+    "BudgetExceededError",
     "MiddlewareTimeout",
     "InputBlocked",
     "ToolBlocked",
