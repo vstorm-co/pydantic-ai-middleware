@@ -231,7 +231,7 @@ class MiddlewareAgent(AbstractAgent[AgentDepsT, OutputDataT]):
             # which is exactly the hook point we need.
             bmr_processor = _create_bmr_processor(self._middleware, ctx)
             original_processors = getattr(self._wrapped, "history_processors", [])
-            self._wrapped.history_processors = list(original_processors) + [bmr_processor]  # type: ignore[union-attr]
+            self._wrapped.history_processors = list(original_processors) + [bmr_processor]  # type: ignore[attr-defined]
 
             try:
                 # Use override() to REPLACE the agent's toolsets (not add to them),
@@ -254,7 +254,7 @@ class MiddlewareAgent(AbstractAgent[AgentDepsT, OutputDataT]):
                         event_stream_handler=event_stream_handler,
                     )
             finally:
-                self._wrapped.history_processors = original_processors  # type: ignore[union-attr]
+                self._wrapped.history_processors = original_processors  # type: ignore[attr-defined]
 
             # Store run usage in metadata for middleware access (e.g. cost tracking)
             if ctx:
@@ -360,7 +360,7 @@ class MiddlewareAgent(AbstractAgent[AgentDepsT, OutputDataT]):
         # Inject before_model_request middleware as a history processor.
         bmr_processor = _create_bmr_processor(self._middleware, ctx)
         original_processors = getattr(self._wrapped, "history_processors", [])
-        self._wrapped.history_processors = list(original_processors) + [bmr_processor]  # type: ignore[union-attr]
+        self._wrapped.history_processors = list(original_processors) + [bmr_processor]  # type: ignore[attr-defined]
 
         try:
             # Use override() to REPLACE the agent's toolsets (not add to them),
@@ -383,7 +383,7 @@ class MiddlewareAgent(AbstractAgent[AgentDepsT, OutputDataT]):
                 ) as run:
                     yield run
         finally:
-            self._wrapped.history_processors = original_processors  # type: ignore[union-attr]
+            self._wrapped.history_processors = original_processors  # type: ignore[attr-defined]
 
     @contextmanager
     def override(self, **kwargs: Any) -> Iterator[None]:
