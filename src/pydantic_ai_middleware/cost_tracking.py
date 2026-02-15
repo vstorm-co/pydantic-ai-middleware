@@ -150,10 +150,7 @@ class CostTrackingMiddleware(AgentMiddleware[Any]):
         Raises:
             BudgetExceededError: If cumulative cost exceeds budget limit.
         """
-        if (
-            self.budget_limit_usd is not None
-            and self._total_cost_usd >= self.budget_limit_usd
-        ):
+        if self.budget_limit_usd is not None and self._total_cost_usd >= self.budget_limit_usd:
             raise BudgetExceededError(self._total_cost_usd, self.budget_limit_usd)
         return prompt
 
