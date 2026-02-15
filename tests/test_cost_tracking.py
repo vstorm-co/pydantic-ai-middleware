@@ -18,13 +18,12 @@ from pydantic_ai_middleware import (
     MiddlewareContext,
     ScopedContext,
 )
+from pydantic_ai_middleware.context import HookType
 from pydantic_ai_middleware.cost_tracking import (
     CostInfo,
     CostTrackingMiddleware,
     create_cost_tracking_middleware,
 )
-from pydantic_ai_middleware.context import HookType
-
 
 # --- Helper to create a fake scoped context with metadata ---
 
