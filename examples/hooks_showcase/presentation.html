@@ -1,0 +1,1317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>pydantic-ai-middleware — Hooks &amp; Guardrails</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Montserrat:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+    <style>
+        /* --- 1. DESIGN SYSTEM --- */
+        :root {
+            --c-black: #111111;
+            --c-dark: #1F1F1F;
+            --c-grey: #666666;
+            --c-light-grey: #F5F5F7;
+            --c-border: #E6E6E6;
+            --c-white: #FFFFFF;
+            --c-red: #D32F2F;
+            --c-red-light: #FDF2F2;
+            --c-green: #2E7D32;
+            --c-green-light: #E8F5E9;
+            --c-blue: #1565C0;
+            --c-blue-light: #E3F2FD;
+            --c-orange: #E65100;
+            --c-orange-light: #FFF3E0;
+            --c-purple: #6A1B9A;
+            --c-purple-light: #F3E5F5;
+
+            --font-head: 'Montserrat', sans-serif;
+            --font-body: 'Inter', sans-serif;
+
+            --radius-md: 12px;
+            --radius-lg: 20px;
+            --shadow-sm: 0 2px 8px rgba(0,0,0,0.04);
+            --shadow-md: 0 8px 24px rgba(0,0,0,0.08);
+            --shadow-lg: 0 16px 40px rgba(0,0,0,0.12);
+            --slide-padding: 60px 80px;
+        }
+
+        /* --- 2. RESET & BASE --- */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background-color: var(--c-black);
+            font-family: var(--font-body);
+            color: var(--c-dark);
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        /* --- 3. SLIDE SCAFFOLDING --- */
+        #viewport { height: 100vh; width: 100%; overflow-y: hidden; scroll-behavior: smooth; }
+        .slide {
+            height: 100vh; width: 100vw;
+            background: var(--c-white);
+            position: relative;
+            padding: var(--slide-padding);
+            display: grid;
+            grid-template-rows: auto 1fr auto;
+            gap: 20px;
+            overflow: hidden;
+        }
+        .slide.dark { background: var(--c-black); color: var(--c-white); }
+
+        /* --- 4. TYPOGRAPHY --- */
+        h1, h2, h3 { font-family: var(--font-head); line-height: 1.2; }
+
+        .slide-header {
+            display: flex; justify-content: space-between; align-items: center;
+            border-bottom: 1px solid var(--c-border); padding-bottom: 20px; margin-bottom: 20px;
+            opacity: 0;
+        }
+        .slide-title-group { display: flex; flex-direction: column; gap: 8px; }
+        h2.slide-title {
+            font-size: 36px; font-weight: 700; color: var(--c-black);
+            position: relative; padding-left: 20px;
+        }
+        h2.slide-title::before {
+            content: ''; position: absolute; left: 0; top: 6px; bottom: 6px;
+            width: 6px; background: var(--c-red); border-radius: 4px;
+        }
+        .slide-subtitle { font-size: 16px; color: var(--c-grey); padding-left: 20px; max-width: 800px; }
+
+        .owner-badge {
+            display: flex; align-items: center; gap: 8px;
+            background: var(--c-light-grey); padding: 8px 16px; border-radius: 50px;
+            font-size: 13px; font-weight: 600; color: var(--c-black);
+            border: 1px solid var(--c-border); transition: all 0.3s ease;
+        }
+        .owner-badge:hover { border-color: var(--c-red); background: var(--c-white); transform: translateY(-2px); box-shadow: var(--shadow-sm); }
+        .owner-badge i { color: var(--c-red); }
+
+        /* --- 5. LAYOUTS --- */
+        .slide-content {
+            display: grid; gap: 40px; align-items: start; height: 100%;
+            overflow-y: auto; opacity: 0;
+            scrollbar-width: none; -ms-overflow-style: none;
+        }
+        .slide-content::-webkit-scrollbar { display: none; }
+        .grid-2 { grid-template-columns: 1fr 1fr; }
+        .grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+        .grid-1-2 { grid-template-columns: 1fr 2fr; }
+
+        p, li { font-size: 16px; line-height: 1.6; color: var(--c-grey); }
+        b, strong { color: var(--c-black); font-weight: 600; }
+
+        ul.v-list { list-style: none; }
+        ul.v-list li { margin-bottom: 12px; padding-left: 24px; position: relative; }
+        ul.v-list li::before {
+            content: '\2022'; color: var(--c-red); position: absolute; left: 0;
+            font-weight: bold; font-size: 20px; line-height: 1.4;
+        }
+
+        /* --- 6. COMPONENTS --- */
+        .metric-card {
+            background: var(--c-white); border-left: 4px solid var(--c-red);
+            padding: 15px 20px; box-shadow: var(--shadow-sm);
+            border-radius: 0 var(--radius-md) var(--radius-md) 0; margin-bottom: 20px;
+        }
+        .metric-val { font-size: 42px; font-weight: 800; color: var(--c-black); font-family: var(--font-head); line-height: 1; }
+        .metric-lbl { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--c-grey); font-weight: 600; margin-top: 4px; display: block; }
+
+        .btn-github {
+            display: inline-flex; align-items: center; gap: 10px;
+            background: var(--c-black); color: white; padding: 12px 24px;
+            border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px;
+            transition: background 0.2s, transform 0.2s;
+        }
+        .btn-github:hover { background: #333; transform: translateY(-2px); }
+
+        .tag {
+            font-size: 11px; padding: 4px 8px; border-radius: 4px;
+            text-transform: uppercase; font-weight: 700; border: 1px solid transparent;
+            display: inline-block;
+        }
+        .tag.active { color: var(--c-red); background: var(--c-red-light); border-color: rgba(211,47,47,0.2); }
+        .tag.dev { color: var(--c-grey); background: #eee; border-color: #ddd; }
+
+        .std-table {
+            width: 100%; border-collapse: separate; border-spacing: 0;
+            border: 1px solid var(--c-border); border-radius: var(--radius-md); overflow: hidden;
+        }
+        .std-table th {
+            background: var(--c-light-grey); padding: 16px; text-align: left;
+            font-size: 13px; font-weight: 700; text-transform: uppercase;
+            color: var(--c-black); border-bottom: 1px solid var(--c-border);
+        }
+        .std-table td { padding: 14px 16px; border-bottom: 1px solid var(--c-border); font-size: 14px; }
+        .std-table tr:last-child td { border-bottom: none; }
+        .std-table tr:hover td { background: #fafafa; }
+        .std-table a { color: var(--c-black); font-weight: 600; text-decoration: none; border-bottom: 1px solid var(--c-red); }
+
+        /* --- 7. TABS --- */
+        .tabs-container {
+            display: flex; flex-direction: column; height: 100%;
+            background: var(--c-light-grey); border-radius: var(--radius-md);
+            border: 1px solid var(--c-border); overflow: hidden;
+        }
+        .tabs-header { display: flex; background: #e0e0e0; border-bottom: 1px solid #ccc; }
+        .tab-btn {
+            padding: 12px 20px; background: transparent; border: none;
+            font-weight: 600; color: var(--c-grey); cursor: pointer;
+            border-right: 1px solid #ccc; font-family: var(--font-body);
+            transition: all 0.2s;
+        }
+        .tab-btn.active { background: var(--c-white); color: var(--c-red); }
+        .tab-content {
+            padding: 20px; background: var(--c-white); flex: 1;
+            overflow: auto; display: none;
+            scrollbar-width: none; -ms-overflow-style: none;
+        }
+        .tab-content::-webkit-scrollbar { display: none; }
+        .tab-content.active { display: block; }
+
+        pre {
+            background: #1e1e2e; color: #cdd6f4; padding: 15px;
+            border-radius: 8px; overflow-x: auto; font-size: 13px;
+            line-height: 1.5;
+        }
+        pre::-webkit-scrollbar { display: none; }
+        pre { scrollbar-width: none; }
+
+        /* --- 8. ANIMATIONS --- */
+        @keyframes slideInUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .active-slide .slide-header { animation: slideInUp 0.6s ease forwards; }
+        .active-slide .slide-content { animation: slideInUp 0.6s ease 0.2s forwards; }
+
+        /* --- 9. NAVIGATION --- */
+        .nav-controls {
+            position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+            background: rgba(17,17,17,0.9); backdrop-filter: blur(10px);
+            padding: 10px 20px; border-radius: 40px;
+            display: flex; align-items: center; gap: 15px;
+            z-index: 1000; box-shadow: var(--shadow-lg);
+        }
+        .nav-btn {
+            background: transparent; border: 1px solid rgba(255,255,255,0.2);
+            color: white; width: 36px; height: 36px; border-radius: 50%;
+            cursor: pointer; transition: all 0.2s; display: grid; place-items: center;
+        }
+        .nav-btn:hover { background: var(--c-red); border-color: var(--c-red); }
+        .nav-info { color: white; font-size: 14px; font-weight: 600; font-family: var(--font-head); min-width: 60px; text-align: center; }
+
+        /* --- 10. TITLE SLIDE --- */
+        .title-slide-content { display: flex; flex-direction: column; justify-content: center; height: 100%; }
+        .big-title { font-size: 72px; font-weight: 800; letter-spacing: -2px; margin-bottom: 20px; }
+        .title-accent { color: var(--c-red); }
+        .title-meta {
+            display: grid; grid-template-columns: auto auto auto;
+            gap: 40px; margin-top: 60px;
+            border-top: 1px solid rgba(255,255,255,0.2); padding-top: 40px;
+        }
+        .meta-box h4 { font-size: 14px; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; }
+        .meta-box p { color: white; font-size: 18px; font-weight: 600; margin: 0; }
+
+        .slide-footer {
+            border-top: 1px solid var(--c-border); padding-top: 15px;
+            display: flex; justify-content: space-between; color: #999; font-size: 12px;
+        }
+
+        /* --- 11. CUSTOM: HOOK CARDS --- */
+        .hook-card {
+            background: var(--c-white); border: 1px solid var(--c-border);
+            border-radius: var(--radius-md); padding: 24px;
+            box-shadow: var(--shadow-sm); transition: all 0.3s;
+        }
+        .hook-card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
+        .hook-card h3 {
+            font-size: 18px; margin-bottom: 8px; display: flex; align-items: center; gap: 10px;
+        }
+        .hook-card p { font-size: 14px; }
+        .hook-card .hook-badge {
+            font-size: 11px; padding: 3px 8px; border-radius: 4px;
+            font-weight: 700; text-transform: uppercase;
+        }
+
+        /* --- 12. PIPELINE FLOW --- */
+        .pipeline {
+            display: flex; align-items: center; gap: 0;
+            flex-wrap: nowrap; justify-content: center;
+            padding: 10px 0;
+        }
+        .pipe-step {
+            padding: 10px 16px; border-radius: 8px;
+            font-size: 13px; font-weight: 600; font-family: var(--font-body);
+            border: 1px solid; white-space: nowrap;
+        }
+        .pipe-arrow { color: #bbb; font-size: 20px; margin: 0 4px; }
+
+        /* --- 13. OUTPUT BLOCK --- */
+        .output-block {
+            background: #0d1117; color: #c9d1d9; padding: 16px 20px;
+            border-radius: 8px; font-family: 'Courier New', monospace;
+            font-size: 13px; line-height: 1.6; border: 1px solid #30363d;
+        }
+        .output-block .prompt { color: #58a6ff; }
+        .output-block .hook { color: #3fb950; }
+        .output-block .result { color: #f0883e; }
+        .output-block .dim { color: #6e7681; }
+    </style>
+</head>
+<body>
+
+<div id="viewport">
+
+    <!-- SLIDE 0: TITLE -->
+    <div class="slide dark active-slide" id="slide-0">
+        <div class="title-slide-content">
+            <p style="font-size: 16px; color: #888; text-transform: uppercase; letter-spacing: 3px; margin-bottom: 20px;">Vstorm Open Source</p>
+            <h1 class="big-title">pydantic-ai-<br><span class="title-accent">middleware</span></h1>
+            <p style="font-size: 24px; color: #aaa; max-width: 700px;">
+                Hooks, guardrails, and lifecycle middleware for PydanticAI agents.
+            </p>
+
+            <div class="title-meta">
+                <div class="meta-box">
+                    <h4>Version</h4>
+                    <p>0.2.x</p>
+                </div>
+                <div class="meta-box">
+                    <h4>Hooks</h4>
+                    <p>7 lifecycle events</p>
+                </div>
+                <div class="meta-box">
+                    <h4>Stack</h4>
+                    <p>PydanticAI + Python 3.10+</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SLIDE 1: WHAT IS IT -->
+    <div class="slide" id="slide-1">
+        <div class="slide-header">
+            <div class="slide-title-group">
+                <h2 class="slide-title">What is pydantic-ai-middleware?</h2>
+                <p class="slide-subtitle">ASGI-style middleware for AI agents — intercept, modify, or block at every stage.</p>
+            </div>
+        </div>
+        <div class="slide-content grid-2">
+            <div>
+                <ul class="v-list" style="font-size: 15px;">
+                    <li><strong>7 lifecycle hooks</strong> — before/after for run, model request, and tool calls, plus error handlers</li>
+                    <li><strong>Composable pipelines</strong> — stack multiple middleware, each one wraps the next</li>
+                    <li><strong>Tool permissions</strong> — ALLOW / DENY / ASK decisions with structured results</li>
+                    <li><strong>Context sharing</strong> — scoped, access-controlled data between hooks</li>
+                    <li><strong>Cost tracking</strong> — built-in token & USD monitoring with budgets</li>
+                    <li><strong>Composable</strong> — chains, conditionals, decorator syntax</li>
+                </ul>
+                <br>
+                <a href="https://github.com/vstorm-co/pydantic-ai-middleware" target="_blank" class="btn-github">
+                    <i class="fa-brands fa-github"></i> Repository
+                </a>
+            </div>
+            <div>
+                <div class="tabs-container">
+                    <div class="tabs-header">
+                        <button class="tab-btn active" onclick="switchTab(this, 'tab-install')">Install</button>
+                        <button class="tab-btn" onclick="switchTab(this, 'tab-basic')">Basic Usage</button>
+                    </div>
+                    <div class="tab-content active" id="tab-install">
+<pre><span style="color:#6c7086;"># Install</span>
+pip install pydantic-ai-middleware
+
+<span style="color:#6c7086;"># Or with uv</span>
+uv add pydantic-ai-middleware</pre>
+                    </div>
+                    <div class="tab-content" id="tab-basic">
+<pre><span style="color:#cba6f7;">from</span> pydantic_ai <span style="color:#cba6f7;">import</span> Agent
+<span style="color:#cba6f7;">from</span> pydantic_ai_middleware <span style="color:#cba6f7;">import</span> (
+    AgentMiddleware, MiddlewareAgent
+)
+
+<span style="color:#cba6f7;">class</span> <span style="color:#f9e2af;">MyMiddleware</span>(AgentMiddleware[None]):
+    <span style="color:#cba6f7;">async def</span> <span style="color:#89b4fa;">before_run</span>(self, prompt, deps, ctx):
+        print(<span style="color:#a6e3a1;">f"Prompt: {prompt}"</span>)
+        <span style="color:#cba6f7;">return</span> prompt
+
+agent = Agent(<span style="color:#a6e3a1;">"openai:gpt-4.1"</span>)
+mw_agent = <span style="color:#f9e2af;">MiddlewareAgent</span>(
+    agent=agent,
+    middleware=[MyMiddleware()],
+)
+result = <span style="color:#cba6f7;">await</span> mw_agent.run(<span style="color:#a6e3a1;">"Hello!"</span>)</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="slide-footer">
+            <span>pydantic-ai-middleware</span> <span>Overview</span>
+        </div>
+    </div>
+
+    <!-- SLIDE 2: LIFECYCLE PIPELINE -->
+    <div class="slide" id="slide-2">
+        <div class="slide-header">
+            <div class="slide-title-group">
+                <h2 class="slide-title">Lifecycle Pipeline</h2>
+                <p class="slide-subtitle">Every agent run passes through 7 hooks in a defined order.</p>
+            </div>
+        </div>
+        <div class="slide-content" style="align-items: center; justify-items: center;">
+            <div class="pipeline" style="flex-wrap: wrap; gap: 8px;">
+                <span class="pipe-step" style="background: var(--c-blue-light); border-color: var(--c-blue); color: var(--c-blue);">1. before_run</span>
+                <span class="pipe-arrow">&rarr;</span>
+                <span class="pipe-step" style="background: var(--c-purple-light); border-color: var(--c-purple); color: var(--c-purple);">2. before_model_request</span>
+                <span class="pipe-arrow">&rarr;</span>
+                <span class="pipe-step" style="background: var(--c-green-light); border-color: var(--c-green); color: var(--c-green);">3. before_tool_call</span>
+                <span class="pipe-arrow">&rarr;</span>
+                <span class="pipe-step" style="background: #fff3e0; border-color: var(--c-orange); color: var(--c-orange);">4. on_tool_error</span>
+                <span class="pipe-arrow">&rarr;</span>
+                <span class="pipe-step" style="background: var(--c-green-light); border-color: var(--c-green); color: var(--c-green);">5. after_tool_call</span>
+                <span class="pipe-arrow">&rarr;</span>
+                <span class="pipe-step" style="background: var(--c-blue-light); border-color: var(--c-blue); color: var(--c-blue);">6. after_run</span>
+                <span class="pipe-arrow">&rarr;</span>
+                <span class="pipe-step" style="background: var(--c-red-light); border-color: var(--c-red); color: var(--c-red);">7. on_error</span>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; width: 100%;">
+                <div style="background: var(--c-light-grey); padding: 24px; border-radius: 12px;">
+                    <h3 style="margin-bottom: 12px; color: var(--c-blue);"><i class="fa-solid fa-arrow-right"></i> before_* hooks</h3>
+                    <p style="font-size: 14px;">Intercept <strong>before</strong> the agent acts.<br>Can <strong>modify</strong> input or <strong>block</strong> execution.</p>
+                </div>
+                <div style="background: var(--c-light-grey); padding: 24px; border-radius: 12px;">
+                    <h3 style="margin-bottom: 12px; color: var(--c-green);"><i class="fa-solid fa-arrow-left"></i> after_* hooks</h3>
+                    <p style="font-size: 14px;">Intercept <strong>after</strong> the agent acts.<br>Can <strong>modify</strong> output or <strong>log</strong> results.</p>
+                </div>
+            </div>
+        </div>
+        <div class="slide-footer">
+            <span>pydantic-ai-middleware</span> <span>Architecture</span>
+        </div>
+    </div>
+
+    <!-- SLIDE 3: before_run -->
+    <div class="slide" id="slide-3">
+        <div class="slide-header">
+            <div class="slide-title-group">
+                <h2 class="slide-title">Hook: before_run</h2>
+                <p class="slide-subtitle">First hook — intercept the user prompt before the agent starts.</p>
+            </div>
+            <div class="owner-badge"><i class="fa-solid fa-play"></i> Entry Point</div>
+        </div>
+        <div class="slide-content grid-2">
+            <div>
+                <div class="tabs-container">
+                    <div class="tabs-header">
+                        <button class="tab-btn active">Code</button>
+                    </div>
+                    <div class="tab-content active">
+<pre><span style="color:#cba6f7;">class</span> <span style="color:#f9e2af;">BeforeRunLogger</span>(AgentMiddleware[None]):
+
+    <span style="color:#cba6f7;">async def</span> <span style="color:#89b4fa;">before_run</span>(self, prompt, deps, ctx):
+        print(<span style="color:#a6e3a1;">f"[before_run] {prompt!r}"</span>)
+        <span style="color:#cba6f7;">return</span> prompt
+
+agent = Agent(<span style="color:#a6e3a1;">"openai:gpt-4.1"</span>)
+mw_agent = MiddlewareAgent(
+    agent=agent,
+    middleware=[BeforeRunLogger()],
+)
+
+result = <span style="color:#cba6f7;">await</span> mw_agent.run(
+    <span style="color:#a6e3a1;">"What is the capital of France?"</span>
+)</pre>
+                    </div>
+                </div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 20px;">
+                <h3 style="color: var(--c-grey); font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Console Output</h3>
+                <div class="output-block">
+                    <span class="prompt">$</span> <span class="dim">python 01_before_run.py</span><br>
+                    <span class="hook">[before_run]</span> Received prompt: 'What is the capital of France?'<br>
+                    <span class="result">[result]</span> The capital of France is Paris.
+                </div>
+                <div style="background: var(--c-blue-light); padding: 16px; border-radius: 8px; border: 1px solid rgba(21,101,192,0.2);">
+                    <strong style="color: var(--c-blue);"><i class="fa-solid fa-info-circle"></i> Use Cases</strong>
+                    <ul class="v-list" style="margin-top: 8px; font-size: 14px;">
+                        <li>Log incoming prompts</li>
+                        <li>Sanitize user input</li>
+                        <li>Block harmful content (<code>raise InputBlocked</code>)</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="slide-footer">
+            <span>pydantic-ai-middleware</span> <span>01_before_run.py</span>
+        </div>
+    </div>
+
+    <!-- SLIDE 4: after_run -->
+    <div class="slide" id="slide-4">
+        <div class="slide-header">
+            <div class="slide-title-group">
+                <h2 class="slide-title">Hook: after_run</h2>
+                <p class="slide-subtitle">Last hook — inspect or modify the final output. Runs in REVERSE order.</p>
+            </div>
+            <div class="owner-badge"><i class="fa-solid fa-flag-checkered"></i> Exit Point</div>
+        </div>
+        <div class="slide-content grid-2">
+            <div>
+                <div class="tabs-container">
+                    <div class="tabs-header"><button class="tab-btn active">Code</button></div>
+                    <div class="tab-content active">
+<pre><span style="color:#cba6f7;">class</span> <span style="color:#f9e2af;">TimingMiddleware</span>(AgentMiddleware[None]):
+
+    <span style="color:#cba6f7;">def</span> <span style="color:#89b4fa;">__init__</span>(self):
+        self._start = <span style="color:#fab387;">0</span>
+
+    <span style="color:#cba6f7;">async def</span> <span style="color:#89b4fa;">before_run</span>(self, prompt, deps, ctx):
+        self._start = time.perf_counter()
+        <span style="color:#cba6f7;">return</span> prompt
+
+    <span style="color:#cba6f7;">async def</span> <span style="color:#89b4fa;">after_run</span>(self, prompt, output, deps, ctx):
+        elapsed = time.perf_counter() - self._start
+        print(<span style="color:#a6e3a1;">f"[after_run] {output!r}"</span>)
+        print(<span style="color:#a6e3a1;">f"[after_run] Elapsed: {elapsed:.3f}s"</span>)
+        <span style="color:#cba6f7;">return</span> output</pre>
+                    </div>
+                </div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 20px;">
+                <h3 style="color: var(--c-grey); font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Console Output</h3>
+                <div class="output-block">
+                    <span class="prompt">$</span> <span class="dim">python 02_after_run.py</span><br>
+                    <span class="hook">[before_run]</span> Timer started<br>
+                    <span class="hook">[after_run]</span> Output: '2 + 2 equals 4.'<br>
+                    <span class="hook">[after_run]</span> Elapsed: 0.674s<br>
+                    <span class="result">[result]</span> 2 + 2 equals 4.
+                </div>
+                <div style="background: var(--c-green-light); padding: 16px; border-radius: 8px; border: 1px solid rgba(46,125,50,0.2);">
+                    <strong style="color: var(--c-green);"><i class="fa-solid fa-info-circle"></i> Use Cases</strong>
+                    <ul class="v-list" style="margin-top: 8px; font-size: 14px;">
+                        <li>Measure response time</li>
+                        <li>Filter or transform output</li>
+                        <li>Send analytics events</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="slide-footer">
+            <span>pydantic-ai-middleware</span> <span>02_after_run.py</span>
+        </div>
+    </div>
+
+    <!-- SLIDE 5: before_tool_call + after_tool_call -->
+    <div class="slide" id="slide-5">
+        <div class="slide-header">
+            <div class="slide-title-group">
+                <h2 class="slide-title">Hooks: before &amp; after tool_call</h2>
+                <p class="slide-subtitle">Intercept every tool invocation — log, modify args, measure timing.</p>
+            </div>
+            <div class="owner-badge"><i class="fa-solid fa-wrench"></i> Tool Layer</div>
+        </div>
+        <div class="slide-content grid-2">
+            <div>
+                <div class="tabs-container">
+                    <div class="tabs-header">
+                        <button class="tab-btn active" onclick="switchTab(this, 'tab-btc-code')">before_tool_call</button>
+                        <button class="tab-btn" onclick="switchTab(this, 'tab-atc-code')">after_tool_call</button>
+                    </div>
+                    <div class="tab-content active" id="tab-btc-code">
+<pre><span style="color:#cba6f7;">class</span> <span style="color:#f9e2af;">BeforeToolCallLogger</span>(AgentMiddleware[None]):
+
+    <span style="color:#cba6f7;">async def</span> <span style="color:#89b4fa;">before_tool_call</span>(
+        self, tool_name, tool_args, deps, ctx
+    ):
+        print(<span style="color:#a6e3a1;">f"[before] {tool_name}({tool_args})"</span>)
+        <span style="color:#cba6f7;">return</span> tool_args
+
+toolset = <span style="color:#f9e2af;">FunctionToolset</span>()
+
+<span style="color:#cba6f7;">@</span>toolset.tool
+<span style="color:#cba6f7;">def</span> <span style="color:#89b4fa;">add</span>(a: <span style="color:#f9e2af;">int</span>, b: <span style="color:#f9e2af;">int</span>) -> <span style="color:#f9e2af;">str</span>:
+    <span style="color:#a6e3a1;">"""Add two numbers."""</span>
+    <span style="color:#cba6f7;">return</span> <span style="color:#f9e2af;">str</span>(a + b)</pre>
+                    </div>
+                    <div class="tab-content" id="tab-atc-code">
+<pre><span style="color:#cba6f7;">class</span> <span style="color:#f9e2af;">AfterToolCallLogger</span>(AgentMiddleware[None]):
+
+    <span style="color:#cba6f7;">async def</span> <span style="color:#89b4fa;">after_tool_call</span>(
+        self, tool_name, tool_args, result, deps, ctx
+    ):
+        print(<span style="color:#a6e3a1;">f"[after] {tool_name} → {result!r}"</span>)
+        <span style="color:#cba6f7;">return</span> result
+
+toolset = <span style="color:#f9e2af;">FunctionToolset</span>()
+
+<span style="color:#cba6f7;">@</span>toolset.tool
+<span style="color:#cba6f7;">def</span> <span style="color:#89b4fa;">multiply</span>(a: <span style="color:#f9e2af;">int</span>, b: <span style="color:#f9e2af;">int</span>) -> <span style="color:#f9e2af;">str</span>:
+    <span style="color:#a6e3a1;">"""Multiply two numbers."""</span>
+    <span style="color:#cba6f7;">return</span> <span style="color:#f9e2af;">str</span>(a * b)</pre>
+                    </div>
+                </div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 20px;">
+                <h3 style="color: var(--c-grey); font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Console Output</h3>
+                <div class="output-block">
+                    <span class="prompt">$</span> <span class="dim">python 04_before_tool_call.py</span><br>
+                    <span class="hook">[before_tool_call]</span> Tool: add<br>
+                    <span class="hook">[before_tool_call]</span> Args: {'a': 17, 'b': 25}<br>
+                    &nbsp;&nbsp;<span class="dim">[tool:add] Computing 17 + 25 = 42</span><br>
+                    <span class="result">[result]</span> 17 + 25 = 42<br><br>
+                    <span class="prompt">$</span> <span class="dim">python 05_after_tool_call.py</span><br>
+                    &nbsp;&nbsp;<span class="dim">[tool:multiply] 12 * 8 = 96</span><br>
+                    <span class="hook">[after_tool_call]</span> Tool: multiply<br>
+                    <span class="hook">[after_tool_call]</span> Result: '96'<br>
+                    <span class="hook">[after_tool_call]</span> Took: 0.0007s<br>
+                    <span class="result">[result]</span> 12 times 8 is 96.
+                </div>
+            </div>
+        </div>
+        <div class="slide-footer">
+            <span>pydantic-ai-middleware</span> <span>04 &amp; 05</span>
+        </div>
+    </div>
+
+    <!-- SLIDE 6: on_tool_error + on_error -->
+    <div class="slide" id="slide-6">
+        <div class="slide-header">
+            <div class="slide-title-group">
+                <h2 class="slide-title">Error Hooks: on_tool_error &amp; on_error</h2>
+                <p class="slide-subtitle">Handle failures gracefully — tool-specific context or global catch-all.</p>
+            </div>
+            <div class="owner-badge"><i class="fa-solid fa-shield-halved"></i> Safety</div>
+        </div>
+        <div class="slide-content grid-2">
+            <div>
+                <div class="tabs-container">
+                    <div class="tabs-header">
+                        <button class="tab-btn active" onclick="switchTab(this, 'tab-ote')">on_tool_error</button>
+                        <button class="tab-btn" onclick="switchTab(this, 'tab-oe')">on_error</button>
+                    </div>
+                    <div class="tab-content active" id="tab-ote">
+<pre><span style="color:#cba6f7;">async def</span> <span style="color:#89b4fa;">on_tool_error</span>(
+    self, tool_name, tool_args, error, deps, ctx
+):
+    print(<span style="color:#a6e3a1;">f"[on_tool_error] {tool_name} failed!"</span>)
+    print(<span style="color:#a6e3a1;">f"  Error: {error}"</span>)
+    <span style="color:#6c7086;"># Replace with user-friendly error</span>
+    <span style="color:#cba6f7;">return</span> RuntimeError(
+        <span style="color:#a6e3a1;">f"'{tool_name}' is unavailable"</span>
+    )
+
+<span style="color:#6c7086;"># Provides tool_name + tool_args context</span>
+<span style="color:#6c7086;"># that on_error does NOT have</span></pre>
+                    </div>
+                    <div class="tab-content" id="tab-oe">
+<pre><span style="color:#cba6f7;">async def</span> <span style="color:#89b4fa;">on_error</span>(
+    self, error, deps, ctx
+):
+    print(<span style="color:#a6e3a1;">f"[on_error] {type(error).__name__}"</span>)
+    <span style="color:#6c7086;"># Return None to re-raise original</span>
+    <span style="color:#6c7086;"># Return new Exception to replace</span>
+    <span style="color:#cba6f7;">return</span> None
+
+<span style="color:#6c7086;"># Catches ANY exception during the run</span>
+<span style="color:#6c7086;"># Global fallback — no tool context</span></pre>
+                    </div>
+                </div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 20px;">
+                <h3 style="color: var(--c-grey); font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Console Output</h3>
+                <div class="output-block">
+                    <span class="prompt">$</span> <span class="dim">python 06_on_tool_error.py</span><br>
+                    <span class="result">[result]</span> Division by zero is undefined in mathematics, so 10 divided by 0 does not have a valid answer.<br><br>
+                    <span class="prompt">$</span> <span class="dim">python 07_on_error.py</span><br>
+                    <span class="hook">[on_error]</span> Caught: InputBlocked: Prompt contains blocked content<br>
+                    <span class="result">[main]</span> Blocked: Prompt contains blocked content<br><br>
+                    <span class="result">[result]</span> Python is a high-level, interpreted programming language known for its simplicity, readability, and versatility.
+                </div>
+            </div>
+        </div>
+        <div class="slide-footer">
+            <span>pydantic-ai-middleware</span> <span>06 &amp; 07</span>
+        </div>
+    </div>
+
+    <!-- SLIDE 7: Tool Blocking & Permissions -->
+    <div class="slide" id="slide-7">
+        <div class="slide-header">
+            <div class="slide-title-group">
+                <h2 class="slide-title">Tool Permissions: ALLOW / DENY / ASK</h2>
+                <p class="slide-subtitle">Structured permission decisions — block sensitive tools or defer to a handler.</p>
+            </div>
+        </div>
+        <div class="slide-content grid-2">
+            <div>
+                <div class="tabs-container">
+                    <div class="tabs-header">
+                        <button class="tab-btn active" onclick="switchTab(this, 'tab-deny')">DENY</button>
+                        <button class="tab-btn" onclick="switchTab(this, 'tab-ask')">ASK</button>
+                    </div>
+                    <div class="tab-content active" id="tab-deny">
+<pre><span style="color:#cba6f7;">from</span> pydantic_ai_middleware <span style="color:#cba6f7;">import</span> (
+    ToolDecision, ToolPermissionResult
+)
+
+<span style="color:#cba6f7;">async def</span> <span style="color:#89b4fa;">before_tool_call</span>(
+    self, tool_name, tool_args, deps, ctx
+):
+    path = tool_args.get(<span style="color:#a6e3a1;">"path"</span>, <span style="color:#a6e3a1;">""</span>)
+    <span style="color:#cba6f7;">if</span> <span style="color:#a6e3a1;">".env"</span> <span style="color:#cba6f7;">in</span> path:
+        <span style="color:#cba6f7;">return</span> <span style="color:#f9e2af;">ToolPermissionResult</span>(
+            decision=ToolDecision.<span style="color:#fab387;">DENY</span>,
+            reason=<span style="color:#a6e3a1;">"Access to .env blocked"</span>,
+        )
+    <span style="color:#cba6f7;">return</span> ToolPermissionResult(
+        decision=ToolDecision.<span style="color:#fab387;">ALLOW</span>
+    )</pre>
+                    </div>
+                    <div class="tab-content" id="tab-ask">
+<pre><span style="color:#cba6f7;">async def</span> <span style="color:#89b4fa;">before_tool_call</span>(
+    self, tool_name, tool_args, deps, ctx
+):
+    <span style="color:#cba6f7;">if</span> tool_name == <span style="color:#a6e3a1;">"delete_file"</span>:
+        <span style="color:#cba6f7;">return</span> <span style="color:#f9e2af;">ToolPermissionResult</span>(
+            decision=ToolDecision.<span style="color:#fab387;">ASK</span>,
+            reason=<span style="color:#a6e3a1;">"Destructive — needs approval"</span>,
+        )
+    <span style="color:#cba6f7;">return</span> tool_args
+
+<span style="color:#6c7086;"># ASK defers to permission_handler callback:</span>
+mw_agent = MiddlewareAgent(
+    agent=agent,
+    middleware=[guard],
+    permission_handler=my_handler, <span style="color:#6c7086;"># async (name, args, reason) → bool</span>
+)</pre>
+                    </div>
+                </div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 20px;">
+                <h3 style="color: var(--c-grey); font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Console Output</h3>
+                <div class="output-block">
+                    <span class="prompt">$</span> <span class="dim">python 08_tool_blocking.py</span><br>
+                    <span class="dim">--- Safe path ---</span><br>
+                    <span class="hook">[PathGuard]</span> ALLOWED: read_file('/home/user/notes.txt')<br>
+                    &nbsp;&nbsp;<span class="dim">[tool:read_file] Reading /home/user/notes.txt</span><br>
+                    <span class="result">[result]</span> Contents of /home/user/notes.txt: [mock data]<br><br>
+                    <span class="dim">--- Blocked path ---</span><br>
+                    <span class="hook">[PathGuard]</span> DENIED: read_file('/etc/passwd')<br>
+                    <span class="result">[result]</span> Access to /etc/passwd was denied.
+                </div>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <div style="display: flex; align-items: center; gap: 8px; background: var(--c-green-light); border: 1px solid #81c784; padding: 8px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; color: var(--c-green);">ALLOW &checkmark;</div>
+                    <div style="display: flex; align-items: center; gap: 8px; background: var(--c-red-light); border: 1px solid #e57373; padding: 8px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; color: var(--c-red);">DENY &cross;</div>
+                    <div style="display: flex; align-items: center; gap: 8px; background: var(--c-orange-light); border: 1px solid #ffb74d; padding: 8px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; color: var(--c-orange);">ASK &quest;</div>
+                </div>
+            </div>
+        </div>
+        <div class="slide-footer">
+            <span>pydantic-ai-middleware</span> <span>08 &amp; 09</span>
+        </div>
+    </div>
+
+    <!-- SLIDE 8: Decorator Syntax + tool_names -->
+    <div class="slide" id="slide-8">
+        <div class="slide-header">
+            <div class="slide-title-group">
+                <h2 class="slide-title">Decorator Syntax &amp; tool_names Filtering</h2>
+                <p class="slide-subtitle">Lightweight alternatives — no class needed. Filter by tool name.</p>
+            </div>
+        </div>
+        <div class="slide-content grid-2">
+            <div>
+                <div class="tabs-container">
+                    <div class="tabs-header">
+                        <button class="tab-btn active" onclick="switchTab(this, 'tab-dec')">Decorators</button>
+                        <button class="tab-btn" onclick="switchTab(this, 'tab-filter')">tool_names</button>
+                    </div>
+                    <div class="tab-content active" id="tab-dec">
+<pre><span style="color:#cba6f7;">from</span> pydantic_ai_middleware.decorators <span style="color:#cba6f7;">import</span> (
+    before_run, after_run,
+    before_tool_call, after_tool_call,
+    before_model_request,
+    on_error, on_tool_error,
+)
+
+<span style="color:#cba6f7;">@</span><span style="color:#f9e2af;">before_run</span>
+<span style="color:#cba6f7;">async def</span> <span style="color:#89b4fa;">log_prompt</span>(prompt, deps, ctx):
+    print(<span style="color:#a6e3a1;">f"Prompt: {prompt}"</span>)
+    <span style="color:#cba6f7;">return</span> prompt
+
+<span style="color:#cba6f7;">@</span><span style="color:#f9e2af;">after_tool_call</span>
+<span style="color:#cba6f7;">async def</span> <span style="color:#89b4fa;">log_result</span>(name, args, result, deps, ctx):
+    print(<span style="color:#a6e3a1;">f"{name} → {result}"</span>)
+    <span style="color:#cba6f7;">return</span> result
+
+<span style="color:#6c7086;"># Use as regular middleware:</span>
+middleware=[log_prompt, log_result]</pre>
+                    </div>
+                    <div class="tab-content" id="tab-filter">
+<pre><span style="color:#cba6f7;">class</span> <span style="color:#f9e2af;">EmailGuard</span>(AgentMiddleware[None]):
+    <span style="color:#6c7086;"># Only fires for these tools:</span>
+    tool_names = {<span style="color:#a6e3a1;">"send_email"</span>, <span style="color:#a6e3a1;">"draft_email"</span>}
+
+    <span style="color:#cba6f7;">async def</span> <span style="color:#89b4fa;">before_tool_call</span>(
+        self, tool_name, tool_args, deps, ctx
+    ):
+        <span style="color:#cba6f7;">if not</span> tool_args.get(<span style="color:#a6e3a1;">"to"</span>):
+            <span style="color:#cba6f7;">raise</span> ToolBlocked(
+                tool_name, <span style="color:#a6e3a1;">"Recipient required!"</span>
+            )
+        <span style="color:#cba6f7;">return</span> tool_args
+
+<span style="color:#6c7086;"># get_weather → guard skipped</span>
+<span style="color:#6c7086;"># send_email  → guard fires</span></pre>
+                    </div>
+                </div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 20px;">
+                <h3 style="color: var(--c-grey); font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Console Output</h3>
+                <div class="output-block">
+                    <span class="prompt">$</span> <span class="dim">python 10_tool_name_filtering.py</span><br><br>
+                    <span class="dim">--- Weather (no guard) ---</span><br>
+                    &nbsp;&nbsp;<span class="dim">[tool:get_weather] City: Warsaw</span><br>
+                    <span class="result">[result]</span> The weather in Warsaw is 22°C and sunny.<br><br>
+                    <span class="dim">--- Email (guard active) ---</span><br>
+                    <span class="hook">[EmailOnlyGuard]</span> Checking send_email: {'to': 'jan@example.com', 'subject': 'Hello', 'body': 'Hi!'}<br>
+                    &nbsp;&nbsp;<span class="dim">[tool:send_email] To: jan@example.com, Subject: Hello</span><br>
+                    <span class="result">[result]</span> The email has been sent to jan@example.com.
+                </div>
+            </div>
+        </div>
+        <div class="slide-footer">
+            <span>pydantic-ai-middleware</span> <span>10 &amp; 12</span>
+        </div>
+    </div>
+
+    <!-- SLIDE 9: Context + Cost Tracking -->
+    <div class="slide" id="slide-9">
+        <div class="slide-header">
+            <div class="slide-title-group">
+                <h2 class="slide-title">Context Sharing &amp; Cost Tracking</h2>
+                <p class="slide-subtitle">Share data between hooks. Track tokens and USD costs with budgets.</p>
+            </div>
+        </div>
+        <div class="slide-content grid-2">
+            <div>
+                <div class="tabs-container">
+                    <div class="tabs-header">
+                        <button class="tab-btn active" onclick="switchTab(this, 'tab-ctx')">Context</button>
+                        <button class="tab-btn" onclick="switchTab(this, 'tab-cost')">Cost Tracking</button>
+                    </div>
+                    <div class="tab-content active" id="tab-ctx">
+<pre><span style="color:#cba6f7;">from</span> pydantic_ai_middleware <span style="color:#cba6f7;">import</span> MiddlewareContext
+<span style="color:#cba6f7;">from</span> pydantic_ai_middleware.context <span style="color:#cba6f7;">import</span> HookType
+
+<span style="color:#cba6f7;">async def</span> <span style="color:#89b4fa;">before_run</span>(self, prompt, deps, ctx):
+    ctx.set(<span style="color:#a6e3a1;">"start_time"</span>, time.perf_counter())
+    <span style="color:#cba6f7;">return</span> prompt
+
+<span style="color:#cba6f7;">async def</span> <span style="color:#89b4fa;">after_run</span>(self, prompt, output, deps, ctx):
+    start = ctx.get_from(
+        HookType.BEFORE_RUN, <span style="color:#a6e3a1;">"start_time"</span>
+    )
+    print(<span style="color:#a6e3a1;">f"Elapsed: {time.perf_counter()-start:.3f}s"</span>)
+    <span style="color:#cba6f7;">return</span> output
+
+<span style="color:#6c7086;"># Access control: each hook can only</span>
+<span style="color:#6c7086;"># read from earlier hooks</span></pre>
+                    </div>
+                    <div class="tab-content" id="tab-cost">
+<pre><span style="color:#cba6f7;">from</span> pydantic_ai_middleware.cost_tracking <span style="color:#cba6f7;">import</span> (
+    CostTrackingMiddleware, CostInfo
+)
+
+cost_mw = <span style="color:#f9e2af;">CostTrackingMiddleware</span>(
+    model_name=<span style="color:#a6e3a1;">"openai:gpt-4.1"</span>,
+    budget_limit_usd=<span style="color:#fab387;">1.00</span>,
+    on_cost_update=<span style="color:#cba6f7;">lambda</span> info: print(
+        <span style="color:#a6e3a1;">f"Run #{info.run_count}: ${info.run_cost_usd:.6f}"</span>
+    ),
+)
+
+<span style="color:#6c7086;"># After runs:</span>
+print(cost_mw.total_cost)  <span style="color:#6c7086;"># $0.001234</span>
+print(cost_mw.total_request_tokens)  <span style="color:#6c7086;"># 1523</span>
+<span style="color:#6c7086;"># Raises BudgetExceededError if over budget</span></pre>
+                    </div>
+                </div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 20px;">
+                <h3 style="color: var(--c-grey); font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Console Output</h3>
+                <div class="output-block">
+                    <span class="prompt">$</span> <span class="dim">python 14_cost_tracking.py</span><br><br>
+                    <span class="dim">=== Run 1 ===</span><br>
+                    <span class="hook">[cost]</span> Run #1<br>
+                    <span class="hook">[cost]</span> &nbsp;&nbsp;Tokens: 20 in / 32 out<br>
+                    <span class="hook">[cost]</span> &nbsp;&nbsp;Run cost: $0.000296<br>
+                    <span class="hook">[cost]</span> &nbsp;&nbsp;Total cost: $0.000296<br>
+                    <span class="result">[result]</span> Python is a high-level, interpreted programming language...<br><br>
+                    <span class="dim">=== Run 2 ===</span><br>
+                    <span class="hook">[cost]</span> Run #2<br>
+                    <span class="hook">[cost]</span> &nbsp;&nbsp;Tokens: 20 in / 25 out<br>
+                    <span class="hook">[cost]</span> &nbsp;&nbsp;Run cost: $0.000240<br>
+                    <span class="hook">[cost]</span> &nbsp;&nbsp;Total cost: $0.000536<br>
+                    <span class="result">[result]</span> Rust is a systems programming language...<br><br>
+                    <span class="dim">=== Cumulative Stats ===</span><br>
+                    Total runs: 2<br>
+                    Total tokens: 40 in / 57 out<br>
+                    Total cost: $0.000536
+                </div>
+            </div>
+        </div>
+        <div class="slide-footer">
+            <span>pydantic-ai-middleware</span> <span>13 &amp; 14</span>
+        </div>
+    </div>
+
+    <!-- SLIDE 10: Full Lifecycle -->
+    <div class="slide" id="slide-10">
+        <div class="slide-header">
+            <div class="slide-title-group">
+                <h2 class="slide-title">Full Lifecycle Trace</h2>
+                <p class="slide-subtitle">All hooks in one middleware — see the complete execution flow.</p>
+            </div>
+        </div>
+        <div class="slide-content grid-2">
+            <div>
+                <div class="tabs-container">
+                    <div class="tabs-header"><button class="tab-btn active">Code</button></div>
+                    <div class="tab-content active">
+<pre><span style="color:#cba6f7;">class</span> <span style="color:#f9e2af;">FullLifecycleLogger</span>(AgentMiddleware[None]):
+    <span style="color:#cba6f7;">async def</span> <span style="color:#89b4fa;">before_run</span>(self, prompt, deps, ctx):
+        self._log(<span style="color:#a6e3a1;">"before_run"</span>)
+        <span style="color:#cba6f7;">return</span> prompt
+    <span style="color:#cba6f7;">async def</span> <span style="color:#89b4fa;">before_model_request</span>(self, msgs, deps, ctx):
+        self._log(<span style="color:#a6e3a1;">"before_model_request"</span>)
+        <span style="color:#cba6f7;">return</span> msgs
+    <span style="color:#cba6f7;">async def</span> <span style="color:#89b4fa;">before_tool_call</span>(self, name, args, deps, ctx):
+        self._log(<span style="color:#a6e3a1;">f"before_tool_call({name})"</span>)
+        <span style="color:#cba6f7;">return</span> args
+    <span style="color:#cba6f7;">async def</span> <span style="color:#89b4fa;">after_tool_call</span>(self, name, args, res, deps, ctx):
+        self._log(<span style="color:#a6e3a1;">f"after_tool_call({name})"</span>)
+        <span style="color:#cba6f7;">return</span> res
+    <span style="color:#cba6f7;">async def</span> <span style="color:#89b4fa;">after_run</span>(self, prompt, output, deps, ctx):
+        self._log(<span style="color:#a6e3a1;">"after_run"</span>)
+        <span style="color:#cba6f7;">return</span> output
+
+<span style="color:#6c7086;"># + on_error, on_tool_error</span></pre>
+                    </div>
+                </div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 20px;">
+                <h3 style="color: var(--c-grey); font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Console Output</h3>
+                <div class="output-block">
+                    <span class="prompt">$</span> <span class="dim">python 16_full_lifecycle.py</span><br><br>
+                    <span class="dim">=== Full Lifecycle Trace ===</span><br><br>
+                    &nbsp;&nbsp;1. <span class="hook">before_run</span>(prompt='What is 7 * 8 + 2?')<br>
+                    &nbsp;&nbsp;2. <span class="hook">before_model_request</span>(messages=1)<br>
+                    &nbsp;&nbsp;3. <span class="hook">before_tool_call</span>(tool=calculate, args={'expression': '7 * 8 + 2'})<br>
+                    &nbsp;&nbsp;4. <span class="hook">after_tool_call</span>(tool=calculate, result='58')<br>
+                    &nbsp;&nbsp;5. <span class="hook">before_model_request</span>(messages=3)<br>
+                    &nbsp;&nbsp;6. <span class="hook">after_run</span>(output='7 * 8 + 2 = 58.')<br><br>
+                    <span class="result">[result]</span> 7 * 8 + 2 = 58.<br><br>
+                    <span class="dim">=== Total events: 6 ===</span>
+                </div>
+            </div>
+        </div>
+        <div class="slide-footer">
+            <span>pydantic-ai-middleware</span> <span>16_full_lifecycle.py</span>
+        </div>
+    </div>
+
+    <!-- SLIDE 11: Real-World — pydantic-deep Integration -->
+    <div class="slide" id="slide-11">
+        <div class="slide-header">
+            <div class="slide-title-group">
+                <h2 class="slide-title">Real-World: pydantic-deep</h2>
+                <p class="slide-subtitle">How middleware powers a production AI agent framework — cost tracking, context management, permissions, and hooks.</p>
+            </div>
+            <div class="owner-badge"><i class="fa-solid fa-rocket"></i> Production</div>
+        </div>
+        <div class="slide-content grid-2">
+            <div>
+                <div class="tabs-container">
+                    <div class="tabs-header">
+                        <button class="tab-btn active" onclick="switchTab(this, 'tab-deep-agent')">create_deep_agent()</button>
+                        <button class="tab-btn" onclick="switchTab(this, 'tab-deep-defaults')">Defaults</button>
+                    </div>
+                    <div class="tab-content active" id="tab-deep-agent">
+<pre><span style="color:#cba6f7;">from</span> pydantic_deep <span style="color:#cba6f7;">import</span> create_deep_agent
+
+agent = create_deep_agent(
+    model=<span style="color:#a6e3a1;">"openai:gpt-4.1"</span>,
+
+    <span style="color:#6c7086;"># Cost tracking (enabled by default)</span>
+    cost_tracking=<span style="color:#fab387;">True</span>,
+    cost_budget_usd=<span style="color:#fab387;">5.00</span>,
+    on_cost_update=my_cost_callback,
+
+    <span style="color:#6c7086;"># Context manager (enabled by default)</span>
+    context_manager=<span style="color:#fab387;">True</span>,
+    context_manager_max_tokens=<span style="color:#fab387;">200_000</span>,
+    on_context_update=my_ctx_callback,
+
+    <span style="color:#6c7086;"># Custom middleware</span>
+    middleware=[audit_mw, permission_mw],
+
+    <span style="color:#6c7086;"># Claude Code-style hooks</span>
+    hooks=[safety_gate, audit_logger],
+)</pre>
+                    </div>
+                    <div class="tab-content" id="tab-deep-defaults">
+<pre><span style="color:#6c7086;"># Middleware assembly order:</span>
+<span style="color:#6c7086;"># 1. User middleware (audit_mw, permission_mw)</span>
+<span style="color:#6c7086;"># 2. HooksMiddleware (from hooks=[])</span>
+<span style="color:#6c7086;"># 3. CheckpointMiddleware (if enabled)</span>
+<span style="color:#6c7086;"># 4. ContextManagerMiddleware (default ON)</span>
+<span style="color:#6c7086;"># 5. CostTrackingMiddleware (default ON)</span>
+
+<span style="color:#6c7086;"># Auto-wraps in MiddlewareAgent when</span>
+<span style="color:#6c7086;"># any middleware is active:</span>
+<span style="color:#cba6f7;">if</span> middleware <span style="color:#cba6f7;">or</span> cost_tracking <span style="color:#cba6f7;">or</span> hooks:
+    <span style="color:#cba6f7;">return</span> <span style="color:#f9e2af;">MiddlewareAgent</span>(
+        agent=agent,
+        middleware=all_middleware,
+        context=middleware_context,
+        permission_handler=permission_handler,
+    )</pre>
+                    </div>
+                </div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 16px;">
+                <h3 style="color: var(--c-grey); font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Features Enabled by Default</h3>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div class="metric-card">
+                        <span class="metric-val" style="font-size: 28px;">Cost</span>
+                        <span class="metric-lbl">CostTrackingMiddleware</span>
+                        <p style="font-size: 12px; color: var(--c-grey); margin-top: 6px;">Token & USD tracking, budget limits, per-run callbacks</p>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-val" style="font-size: 28px;">Context</span>
+                        <span class="metric-lbl">ContextManagerMiddleware</span>
+                        <p style="font-size: 12px; color: var(--c-grey); margin-top: 6px;">Auto-compression at 90% of 200K token budget</p>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-val" style="font-size: 28px;">Hooks</span>
+                        <span class="metric-lbl">HooksMiddleware</span>
+                        <p style="font-size: 12px; color: var(--c-grey); margin-top: 6px;">Claude Code-style shell/Python hooks with matchers</p>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-val" style="font-size: 28px;">Custom</span>
+                        <span class="metric-lbl">Your AgentMiddleware</span>
+                        <p style="font-size: 12px; color: var(--c-grey); margin-top: 6px;">Audit, permissions, logging — compose freely</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="slide-footer">
+            <span>pydantic-ai-middleware</span> <span>pydantic-deep integration</span>
+        </div>
+    </div>
+
+    <!-- SLIDE 12: Real-World — PermissionMiddleware -->
+    <div class="slide" id="slide-12">
+        <div class="slide-header">
+            <div class="slide-title-group">
+                <h2 class="slide-title">Real-World: Path Permissions</h2>
+                <p class="slide-subtitle">Production middleware from pydantic-deep — regex-based path blocking for file tools.</p>
+            </div>
+            <div class="owner-badge"><i class="fa-solid fa-shield-halved"></i> Security</div>
+        </div>
+        <div class="slide-content grid-2">
+            <div>
+                <div class="tabs-container">
+                    <div class="tabs-header">
+                        <button class="tab-btn active">Code</button>
+                    </div>
+                    <div class="tab-content active">
+<pre>BLOCKED_PATTERNS = [
+    <span style="color:#a6e3a1;">r"/etc/passwd"</span>, <span style="color:#a6e3a1;">r"\.env$"</span>,
+    <span style="color:#a6e3a1;">r"/root/"</span>, <span style="color:#a6e3a1;">r"\.ssh/"</span>,
+    <span style="color:#a6e3a1;">r"id_rsa"</span>, <span style="color:#a6e3a1;">r"/proc/"</span>,
+]
+FILE_TOOLS = {<span style="color:#a6e3a1;">"read_file"</span>, <span style="color:#a6e3a1;">"write_file"</span>, <span style="color:#a6e3a1;">"edit_file"</span>}
+
+<span style="color:#cba6f7;">class</span> <span style="color:#f9e2af;">PermissionMiddleware</span>(AgentMiddleware[DeepAgentDeps]):
+
+    <span style="color:#cba6f7;">async def</span> <span style="color:#89b4fa;">before_tool_call</span>(self, tool_name, tool_args, deps, ctx):
+        <span style="color:#cba6f7;">if</span> tool_name <span style="color:#cba6f7;">not in</span> FILE_TOOLS:
+            <span style="color:#cba6f7;">return</span> tool_args
+
+        path = tool_args.get(<span style="color:#a6e3a1;">"path"</span>, <span style="color:#a6e3a1;">""</span>)
+        <span style="color:#cba6f7;">for</span> pattern <span style="color:#cba6f7;">in</span> BLOCKED_PATTERNS:
+            <span style="color:#cba6f7;">if</span> re.search(pattern, path):
+                <span style="color:#cba6f7;">return</span> <span style="color:#f9e2af;">ToolPermissionResult</span>(
+                    decision=ToolDecision.<span style="color:#fab387;">DENY</span>,
+                    reason=<span style="color:#a6e3a1;">f"Blocked: {pattern}"</span>,
+                )
+        <span style="color:#cba6f7;">return</span> tool_args</pre>
+                    </div>
+                </div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 20px;">
+                <h3 style="color: var(--c-grey); font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">How it works</h3>
+                <div class="output-block">
+                    <span class="dim"># Agent tries to read /etc/passwd:</span><br><br>
+                    <span class="hook">[PermissionMiddleware]</span> before_tool_call(<span class="result">read_file</span>)<br>
+                    <span class="hook">[PermissionMiddleware]</span> Path matches: <span style="color: var(--c-red);">/etc/passwd</span><br>
+                    <span class="hook">[PermissionMiddleware]</span> Decision: <span style="color: var(--c-red); font-weight: 600;">DENY</span><br><br>
+                    <span class="dim"># Agent gets ToolBlocked and must explain:</span><br>
+                    <span class="result">[result]</span> I can't read that file — access denied.
+                </div>
+                <div style="background: var(--c-red-light); padding: 16px; border-radius: 8px; border: 1px solid rgba(211,47,47,0.2);">
+                    <strong style="color: var(--c-red);"><i class="fa-solid fa-shield-halved"></i> Three decisions</strong>
+                    <ul class="v-list" style="margin-top: 8px; font-size: 14px;">
+                        <li><strong>ALLOW</strong> — let the tool run (optionally with modified args)</li>
+                        <li><strong>DENY</strong> — block with a reason (agent sees ToolBlocked)</li>
+                        <li><strong>ASK</strong> — defer to a permission_handler callback</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="slide-footer">
+            <span>pydantic-ai-middleware</span> <span>pydantic-deep/examples/full_app</span>
+        </div>
+    </div>
+
+    <!-- SLIDE 13: Real-World — Hooks (safety_gate + audit_logger) -->
+    <div class="slide" id="slide-13">
+        <div class="slide-header">
+            <div class="slide-title-group">
+                <h2 class="slide-title">Real-World: Claude Code-Style Hooks</h2>
+                <p class="slide-subtitle">Python handler hooks — block dangerous commands, log tool calls in the background.</p>
+            </div>
+            <div class="owner-badge"><i class="fa-solid fa-terminal"></i> Hooks</div>
+        </div>
+        <div class="slide-content grid-2">
+            <div>
+                <div class="tabs-container">
+                    <div class="tabs-header">
+                        <button class="tab-btn active" onclick="switchTab(this, 'tab-safety')">safety_gate</button>
+                        <button class="tab-btn" onclick="switchTab(this, 'tab-audit-hook')">audit_logger</button>
+                        <button class="tab-btn" onclick="switchTab(this, 'tab-hook-reg')">Registration</button>
+                    </div>
+                    <div class="tab-content active" id="tab-safety">
+<pre><span style="color:#cba6f7;">async def</span> <span style="color:#89b4fa;">safety_gate_handler</span>(hook_input: HookInput) -> HookResult:
+    <span style="color:#a6e3a1;">"""PRE_TOOL_USE: blocks dangerous commands."""</span>
+    command = hook_input.tool_input.get(<span style="color:#a6e3a1;">"command"</span>, <span style="color:#a6e3a1;">""</span>)
+
+    dangerous = [
+        <span style="color:#a6e3a1;">r"rm\s+-rf\s+/"</span>,
+        <span style="color:#a6e3a1;">r"mkfs\."</span>,
+        <span style="color:#a6e3a1;">r"dd\s+if=.*of=/dev/"</span>,
+        <span style="color:#a6e3a1;">r":\(\)\{"</span>,  <span style="color:#6c7086;"># fork bomb</span>
+    ]
+
+    <span style="color:#cba6f7;">for</span> pattern <span style="color:#cba6f7;">in</span> dangerous:
+        <span style="color:#cba6f7;">if</span> re.search(pattern, command):
+            <span style="color:#cba6f7;">return</span> HookResult(
+                allow=<span style="color:#fab387;">False</span>,
+                reason=<span style="color:#a6e3a1;">f"BLOCKED: {command}"</span>,
+            )
+
+    <span style="color:#cba6f7;">return</span> HookResult(allow=<span style="color:#fab387;">True</span>)</pre>
+                    </div>
+                    <div class="tab-content" id="tab-audit-hook">
+<pre><span style="color:#cba6f7;">async def</span> <span style="color:#89b4fa;">audit_logger_handler</span>(
+    hook_input: HookInput,
+) -> HookResult:
+    <span style="color:#a6e3a1;">"""POST_TOOL_USE: logs all tool calls.
+    Runs in background (fire-and-forget)."""</span>
+
+    args = str(hook_input.tool_input)[:<span style="color:#fab387;">200</span>]
+    logger.info(
+        <span style="color:#a6e3a1;">f"AUDIT: {hook_input.tool_name}({args})"</span>
+    )
+
+    <span style="color:#cba6f7;">return</span> HookResult(allow=<span style="color:#fab387;">True</span>)</pre>
+                    </div>
+                    <div class="tab-content" id="tab-hook-reg">
+<pre><span style="color:#cba6f7;">from</span> pydantic_deep <span style="color:#cba6f7;">import</span> Hook, HookEvent
+
+HOOKS = [
+    <span style="color:#6c7086;"># Background audit — fires after every tool</span>
+    Hook(
+        event=HookEvent.<span style="color:#fab387;">POST_TOOL_USE</span>,
+        handler=audit_logger_handler,
+        background=<span style="color:#fab387;">True</span>,
+    ),
+    <span style="color:#6c7086;"># Safety gate — blocks dangerous 'execute' calls</span>
+    Hook(
+        event=HookEvent.<span style="color:#fab387;">PRE_TOOL_USE</span>,
+        handler=safety_gate_handler,
+        matcher=<span style="color:#a6e3a1;">"execute"</span>,  <span style="color:#6c7086;"># only 'execute' tool</span>
+        timeout=<span style="color:#fab387;">5</span>,
+    ),
+]
+
+agent = create_deep_agent(hooks=HOOKS)</pre>
+                    </div>
+                </div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 20px;">
+                <h3 style="color: var(--c-grey); font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Hook Features</h3>
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                    <div style="background: var(--c-light-grey); padding: 16px; border-radius: 8px; border-left: 4px solid var(--c-red);">
+                        <strong style="font-size: 14px;">PRE_TOOL_USE</strong>
+                        <p style="font-size: 13px; color: var(--c-grey); margin-top: 4px;">Runs before tool execution. Return <code>allow=False</code> to block. Supports <code>matcher</code> regex to target specific tools.</p>
+                    </div>
+                    <div style="background: var(--c-light-grey); padding: 16px; border-radius: 8px; border-left: 4px solid var(--c-green);">
+                        <strong style="font-size: 14px;">POST_TOOL_USE</strong>
+                        <p style="font-size: 13px; color: var(--c-grey); margin-top: 4px;">Runs after tool completes. Can modify result. Set <code>background=True</code> for fire-and-forget logging.</p>
+                    </div>
+                    <div style="background: var(--c-light-grey); padding: 16px; border-radius: 8px; border-left: 4px solid var(--c-orange);">
+                        <strong style="font-size: 14px;">POST_TOOL_USE_FAILURE</strong>
+                        <p style="font-size: 13px; color: var(--c-grey); margin-top: 4px;">Runs when a tool raises an exception. Access error details via <code>hook_input.tool_error</code>.</p>
+                    </div>
+                </div>
+                <div style="background: var(--c-blue-light); padding: 12px; border-radius: 8px; border: 1px solid rgba(21,101,192,0.2); font-size: 13px;">
+                    <strong style="color: var(--c-blue);"><i class="fa-solid fa-info-circle"></i></strong>
+                    Hooks can also be <strong>shell commands</strong> (exit 0 = allow, exit 2 = deny), following Claude Code conventions.
+                </div>
+            </div>
+        </div>
+        <div class="slide-footer">
+            <span>pydantic-ai-middleware</span> <span>pydantic-deep hooks</span>
+        </div>
+    </div>
+
+    <!-- SLIDE 14: Summary Table -->
+    <div class="slide" id="slide-14">
+        <div class="slide-header">
+            <div class="slide-title-group">
+                <h2 class="slide-title">Examples Reference</h2>
+                <p class="slide-subtitle">16 standalone examples covering every feature.</p>
+            </div>
+        </div>
+        <div class="slide-content">
+            <table class="std-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>File</th>
+                        <th>Hook / Feature</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>01</td><td><strong>01_before_run.py</strong></td><td><span class="tag active">before_run</span></td><td>Log incoming prompts</td></tr>
+                    <tr><td>02</td><td><strong>02_after_run.py</strong></td><td><span class="tag active">after_run</span></td><td>Measure wall-clock time</td></tr>
+                    <tr><td>03</td><td><strong>03_before_model_request.py</strong></td><td><span class="tag active">before_model_request</span></td><td>Count LLM API calls</td></tr>
+                    <tr><td>04</td><td><strong>04_before_tool_call.py</strong></td><td><span class="tag active">before_tool_call</span></td><td>Log tool invocations</td></tr>
+                    <tr><td>05</td><td><strong>05_after_tool_call.py</strong></td><td><span class="tag active">after_tool_call</span></td><td>Log results + timing</td></tr>
+                    <tr><td>06</td><td><strong>06_on_tool_error.py</strong></td><td><span class="tag active">on_tool_error</span></td><td>Handle tool failures</td></tr>
+                    <tr><td>07</td><td><strong>07_on_error.py</strong></td><td><span class="tag active">on_error</span></td><td>Global error handler</td></tr>
+                    <tr><td>08</td><td><strong>08_tool_blocking.py</strong></td><td><span class="tag dev">ToolPermissionResult</span></td><td>ALLOW / DENY decisions</td></tr>
+                    <tr><td>09</td><td><strong>09_permission_handler.py</strong></td><td><span class="tag dev">ToolDecision.ASK</span></td><td>Interactive approval flow</td></tr>
+                    <tr><td>10</td><td><strong>10_tool_name_filtering.py</strong></td><td><span class="tag dev">tool_names</span></td><td>Per-tool middleware</td></tr>
+                    <tr><td>11</td><td><strong>11_middleware_chain.py</strong></td><td><span class="tag dev">MiddlewareChain</span></td><td>Compose middleware</td></tr>
+                    <tr><td>12</td><td><strong>12_decorator_middleware.py</strong></td><td><span class="tag dev">@before_run</span></td><td>Decorator syntax</td></tr>
+                    <tr><td>13</td><td><strong>13_context_sharing.py</strong></td><td><span class="tag dev">MiddlewareContext</span></td><td>Share data between hooks</td></tr>
+                    <tr><td>14</td><td><strong>14_cost_tracking.py</strong></td><td><span class="tag dev">CostTrackingMiddleware</span></td><td>Token &amp; USD tracking</td></tr>
+                    <tr><td>15</td><td><strong>15_multiple_middleware.py</strong></td><td><span class="tag dev">Execution order</span></td><td>Multiple middleware pipeline</td></tr>
+                    <tr><td>16</td><td><strong>16_full_lifecycle.py</strong></td><td><span class="tag active">All hooks</span></td><td>Complete lifecycle trace</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="slide-footer">
+            <span>pydantic-ai-middleware</span> <span>Reference</span>
+        </div>
+    </div>
+
+    <!-- SLIDE 15: CTA -->
+    <div class="slide dark" id="slide-15" style="display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
+        <h2 style="font-size: 56px; color: white; margin-bottom: 20px;">Get Started</h2>
+        <p style="font-size: 20px; color: #aaa; max-width: 700px; margin-bottom: 40px;">
+            pip install pydantic-ai-middleware
+        </p>
+
+        <div style="display: flex; gap: 60px; margin-bottom: 50px;">
+            <div style="text-align: center;">
+                <i class="fa-solid fa-shield-halved" style="font-size: 36px; color: var(--c-red); margin-bottom: 12px;"></i>
+                <p style="color: white; font-weight: 600;">Guardrails</p>
+                <p style="color: #888; font-size: 13px;">Block harmful inputs</p>
+            </div>
+            <div style="text-align: center;">
+                <i class="fa-solid fa-wrench" style="font-size: 36px; color: var(--c-red); margin-bottom: 12px;"></i>
+                <p style="color: white; font-weight: 600;">Tool Control</p>
+                <p style="color: #888; font-size: 13px;">ALLOW / DENY / ASK</p>
+            </div>
+            <div style="text-align: center;">
+                <i class="fa-solid fa-chart-line" style="font-size: 36px; color: var(--c-red); margin-bottom: 12px;"></i>
+                <p style="color: white; font-weight: 600;">Cost Tracking</p>
+                <p style="color: #888; font-size: 13px;">Tokens &amp; USD budgets</p>
+            </div>
+            <div style="text-align: center;">
+                <i class="fa-solid fa-layer-group" style="font-size: 36px; color: var(--c-red); margin-bottom: 12px;"></i>
+                <p style="color: white; font-weight: 600;">Composable</p>
+                <p style="color: #888; font-size: 13px;">Chains &amp; conditionals</p>
+            </div>
+        </div>
+
+        <a href="https://github.com/vstorm-co/pydantic-ai-middleware" target="_blank" class="btn-github" style="font-size: 18px; padding: 16px 32px;">
+            <i class="fa-brands fa-github"></i> vstorm-co/pydantic-ai-middleware
+        </a>
+
+        <div style="position: absolute; bottom: 30px; color: #555; font-size: 12px;">
+            Vstorm Open Source 2026
+        </div>
+    </div>
+
+</div>
+
+<!-- NAVIGATION -->
+<div class="nav-controls">
+    <button class="nav-btn" onclick="changeSlide(-1)"><i class="fa-solid fa-arrow-left"></i></button>
+    <div class="nav-info" id="slide-counter">1 / 16</div>
+    <button class="nav-btn" onclick="changeSlide(1)"><i class="fa-solid fa-arrow-right"></i></button>
+</div>
+
+<script>
+    let currentSlide = 0;
+    const slides = document.querySelectorAll('.slide');
+    const totalSlides = slides.length;
+    const counter = document.getElementById('slide-counter');
+
+    function updateSlide() {
+        slides[currentSlide].scrollIntoView({ behavior: 'smooth' });
+        counter.innerText = `${currentSlide + 1} / ${totalSlides}`;
+        slides.forEach(s => s.classList.remove('active-slide'));
+        setTimeout(() => { slides[currentSlide].classList.add('active-slide'); }, 300);
+    }
+
+    function changeSlide(dir) {
+        const next = currentSlide + dir;
+        if (next >= 0 && next < totalSlides) { currentSlide = next; updateSlide(); }
+    }
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); changeSlide(1); }
+        if (e.key === 'ArrowLeft') changeSlide(-1);
+    });
+
+    function switchTab(btn, targetId) {
+        const container = btn.closest('.tabs-container');
+        container.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        container.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        btn.classList.add('active');
+        container.querySelector(`#${targetId}`).classList.add('active');
+    }
+
+    updateSlide();
+</script>
+
+</body>
+</html>
