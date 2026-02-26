@@ -1,6 +1,6 @@
 [project]
 name = "pydantic-ai-middleware"
-version = "0.2.1"
+version = "0.2.2"
 description = "Simple middleware library for Pydantic-AI - before/after hooks without imposed guardrails structure"
 readme = "README.md"
 license = "MIT"
@@ -23,7 +23,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "pydantic-ai>=1.39",
+    "pydantic-ai-slim>=1.39",
     "pydantic>=2.0",
     "genai-prices>=0.0.49",
 ]
