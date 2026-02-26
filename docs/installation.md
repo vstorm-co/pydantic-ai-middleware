@@ -3,7 +3,7 @@
 ## Requirements
 
 - Python 3.10 or higher
-- pydantic-ai >= 0.1.0
+- pydantic-ai-slim >= 1.39
 
 ## Install with pip
 

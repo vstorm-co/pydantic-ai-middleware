@@ -97,7 +97,7 @@ pydantic-ai-middleware takes a different approach from traditional guardrails li
 - **Hook Timeouts** — Per-middleware timeout enforcement with `MiddlewareTimeout`
 - **Permission Decisions** — Structured ALLOW/DENY/ASK protocol for tool authorization
 - **Cost Tracking** — Automatic token usage and USD cost monitoring with budget limits
-- **Lightweight** — Only requires pydantic-ai and genai-prices
+- **Lightweight** — Only requires pydantic-ai-slim and genai-prices
 
 ---
 
