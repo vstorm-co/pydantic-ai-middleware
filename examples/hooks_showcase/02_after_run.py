@@ -33,7 +33,7 @@ class TimingMiddleware(AgentMiddleware[None]):
         ctx: Any = None,
     ) -> str | Sequence[Any]:
         self._start = time.perf_counter()
-        print(f"[before_run] Timer started")
+        print("[before_run] Timer started")
         return prompt
 
     async def after_run(

@@ -69,7 +69,7 @@ def list_files(directory: str) -> str:
 async def auto_deny_handler(tool_name: str, tool_args: dict[str, Any], reason: str) -> bool:
     """Simulated permission handler — auto-denies destructive actions."""
     print(f"[permission_handler] Tool: {tool_name}, Reason: {reason}")
-    print(f"[permission_handler] Decision: DENIED (auto)")
+    print("[permission_handler] Decision: DENIED (auto)")
     return False  # Deny
 
 

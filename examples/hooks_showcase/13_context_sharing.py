@@ -34,7 +34,7 @@ class RequestTracker(AgentMiddleware[None]):
         if ctx:
             ctx.set("start_time", time.perf_counter())
             ctx.set("prompt_length", len(str(prompt)))
-            print(f"[before_run] Stored start_time and prompt_length in context")
+            print("[before_run] Stored start_time and prompt_length in context")
         return prompt
 
     async def before_tool_call(

@@ -102,7 +102,7 @@ toolset: FunctionToolset[None] = FunctionToolset()
 @toolset.tool
 def calculate(expression: str) -> str:
     """Evaluate a math expression."""
-    result = eval(expression)  # noqa: S307
+    result = eval(expression)
     return str(result)
 
 
