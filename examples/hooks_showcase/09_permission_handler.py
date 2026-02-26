@@ -45,8 +45,7 @@ class InteractiveGuard(AgentMiddleware[None]):
 agent = Agent(
     "openai:gpt-4.1",
     instructions=(
-        "Use the available tools to answer. "
-        "If a tool is blocked, explain what happened."
+        "Use the available tools to answer. If a tool is blocked, explain what happened."
     ),
 )
 
