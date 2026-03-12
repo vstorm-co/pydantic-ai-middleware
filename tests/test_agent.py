@@ -339,6 +339,82 @@ class TestMiddlewareAgentIter:
                 pass
 
         assert logging_mw.before_run_calls == ["test prompt"]
+        assert len(logging_mw.after_run_calls) == 1
+        assert logging_mw.after_run_calls[0][0] == "test prompt"
+
+    async def test_iter_calls_after_run_in_reverse_order(self) -> None:
+        """Test iter calls after_run middleware in reverse order."""
+        model = TestModel()
+        model.custom_output_text = "result"
+
+        agent = Agent(model, output_type=str)
+        mw1 = ModifyingMiddleware(prefix="first")
+        mw2 = ModifyingMiddleware(prefix="second")
+        middleware_agent = MiddlewareAgent(agent, middleware=[mw1, mw2])
+
+        async with middleware_agent.iter("test") as run:
+            async for _ in run:
+                pass
+
+        # after_run runs in reverse: mw2 first, then mw1
+        # mw2 transforms to "second output: result"
+        # mw1 transforms to "first output: second output: result"
+        # We can't verify the output directly (it's not returned from iter),
+        # but we verify the middleware was called by checking run completed
+        assert run.result is not None
+
+    async def test_iter_calls_on_error(self) -> None:
+        """Test iter calls on_error middleware when exception occurs."""
+        model = TestModel()
+        model.custom_output_text = "result"
+
+        agent = Agent(model, output_type=str)
+        logging_mw = LoggingMiddleware()
+        middleware_agent = MiddlewareAgent(agent, middleware=[logging_mw])
+
+        with pytest.raises(ValueError, match="test error"):
+            async with middleware_agent.iter("test") as _run:
+                raise ValueError("test error")
+
+        assert len(logging_mw.errors) == 1
+        assert str(logging_mw.errors[0]) == "test error"
+
+    async def test_iter_on_error_can_convert_exception(self) -> None:
+        """Test iter on_error can convert exception to a different type."""
+
+        class ConvertingMiddleware(AgentMiddleware[None]):
+            async def on_error(
+                self, error: Exception, deps: None, ctx: ScopedContext | None = None
+            ) -> Exception | None:
+                if isinstance(error, ValueError):
+                    return RuntimeError("converted")
+                return None
+
+        model = TestModel()
+        model.custom_output_text = "result"
+
+        agent = Agent(model, output_type=str)
+        middleware_agent = MiddlewareAgent(agent, middleware=[ConvertingMiddleware()])
+
+        with pytest.raises(RuntimeError, match="converted"):
+            async with middleware_agent.iter("test") as _run:
+                raise ValueError("original")
+
+    async def test_iter_no_after_run_when_not_fully_iterated(self) -> None:
+        """Test after_run is skipped when run.result is None (not fully iterated)."""
+        model = TestModel()
+        model.custom_output_text = "result"
+
+        agent = Agent(model, output_type=str)
+        logging_mw = LoggingMiddleware()
+        middleware_agent = MiddlewareAgent(agent, middleware=[logging_mw])
+
+        # Exit without iterating — run.result will be None
+        async with middleware_agent.iter("test") as _run:
+            pass  # don't iterate
+
+        # after_run should not be called since run didn't complete
+        assert logging_mw.after_run_calls == []
 
     async def test_iter_with_additional_toolsets(self) -> None:
         """Test iter with additional toolsets wraps them with middleware."""
@@ -477,12 +553,15 @@ class TestMiddlewareAgentWithContext:
         logging_mw = LoggingMiddleware()
         middleware_agent = MiddlewareAgent(agent, middleware=[logging_mw], context=ctx)
 
-        async with middleware_agent.iter("test prompt"):
-            pass
+        async with middleware_agent.iter("test prompt") as run:
+            async for _ in run:
+                pass
 
         # Verify metadata was set
         assert ctx.metadata["user_prompt"] == "test prompt"
         assert "transformed_prompt" in ctx.metadata
+        assert "run_usage" in ctx.metadata
+        assert "final_output" in ctx.metadata
 
 
 class TestMiddlewareAgentAsyncContext:

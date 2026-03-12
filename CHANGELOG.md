@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.3] - 2026-03-11
+
+### Fixed
+
+- **`MiddlewareAgent.iter()` now calls `after_run` and `on_error` middleware** — previously only `before_run` was invoked, making middleware unusable for post-processing (e.g. audit logging, cost tracking) when using `iter()` / `run_stream()`. `after_run` is called in reverse order after iteration completes, `on_error` is called when an exception propagates out of the `async with` block. ([#17](https://github.com/vstorm-co/pydantic-ai-middleware/issues/17))
+
 ## [0.2.2] - 2026-02-26
 
 ### Changed

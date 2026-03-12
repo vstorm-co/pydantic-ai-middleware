@@ -381,7 +381,44 @@ class MiddlewareAgent(AbstractAgent[AgentDepsT, OutputDataT]):
                     infer_name=infer_name,
                     builtin_tools=builtin_tools,
                 ) as run:
-                    yield run
+                    try:
+                        yield run
+                    except Exception as e:
+                        # Apply on_error middleware (with timeout)
+                        on_error_ctx = ctx.for_hook(HookType.ON_ERROR) if ctx else None
+                        for mw in self._middleware:
+                            mw_name = type(mw).__name__
+                            handled = await call_with_timeout(
+                                mw.on_error(e, deps, on_error_ctx),
+                                mw.timeout,
+                                mw_name,
+                                "on_error",
+                            )
+                            if handled is not None:
+                                raise handled from e
+                        raise
+                    else:
+                        # Apply after_run middleware (in reverse order, with timeout)
+                        if run.result is not None:
+                            # Store run usage in metadata
+                            if ctx:
+                                ctx.set_metadata("run_usage", run.result.usage())
+
+                            output = run.result.output
+                            after_run_ctx = ctx.for_hook(HookType.AFTER_RUN) if ctx else None
+                            for mw in reversed(self._middleware):
+                                if current_prompt is not None:
+                                    mw_name = type(mw).__name__
+                                    output = await call_with_timeout(
+                                        mw.after_run(current_prompt, output, deps, after_run_ctx),
+                                        mw.timeout,
+                                        mw_name,
+                                        "after_run",
+                                    )
+
+                            # Store final output in metadata
+                            if ctx:
+                                ctx.set_metadata("final_output", output)
         finally:
             self._wrapped.history_processors = original_processors  # type: ignore[attr-defined]
 
