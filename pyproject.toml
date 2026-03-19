@@ -1,6 +1,6 @@
 [project]
 name = "pydantic-ai-middleware"
-version = "0.2.3"
+version = "0.2.4"
 description = "Simple middleware library for Pydantic-AI - before/after hooks without imposed guardrails structure"
 readme = "README.md"
 license = "MIT"

@@ -114,6 +114,10 @@ class MiddlewareAgent(AbstractAgent[AgentDepsT, OutputDataT]):
         return self._wrapped.model
 
     @property
+    def description(self) -> str:
+        return getattr(self._wrapped, "description", "")
+
+    @property
     def name(self) -> str | None:
         return self._wrapped.name
 

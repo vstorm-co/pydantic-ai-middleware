@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.4] - 2026-03-19
+
+### Fixed
+
+- **`MiddlewareAgent` missing `description` property** — pydantic-ai added `description` as an abstract property on `AbstractAgent`, causing `MiddlewareAgent` instantiation to fail with `reportAbstractUsage`. Delegates to the wrapped agent with a fallback for older pydantic-ai versions.
+
 ## [0.2.3] - 2026-03-11
 
 ### Fixed

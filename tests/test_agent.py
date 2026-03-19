@@ -132,6 +132,12 @@ class TestMiddlewareAgentProperties:
         middleware_agent = MiddlewareAgent(agent)
         assert middleware_agent.model is model
 
+    def test_description_property(self) -> None:
+        """Test description property delegates to wrapped."""
+        agent = Agent(TestModel(), output_type=str)
+        middleware_agent = MiddlewareAgent(agent)
+        assert isinstance(middleware_agent.description, str)
+
     def test_name_property(self) -> None:
         """Test name property delegates to wrapped."""
         agent = Agent(TestModel(), output_type=str, name="test_agent")
