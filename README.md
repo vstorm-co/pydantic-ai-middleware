@@ -12,13 +12,17 @@
 </p>
 
 <p align="center">
-  <b>Cost Tracking</b> — budget enforcement with genai-prices
+  <b>Cost Tracking</b>
   &nbsp;&bull;&nbsp;
-  <b>Tool Permissions</b> — block or require approval per tool
+  <b>Prompt Injection</b>
   &nbsp;&bull;&nbsp;
-  <b>Input/Output Guards</b> — pluggable safety checks
+  <b>PII Detection</b>
   &nbsp;&bull;&nbsp;
-  <b>Async Guardrails</b> — concurrent guard + LLM execution
+  <b>Secret Redaction</b>
+  &nbsp;&bull;&nbsp;
+  <b>Tool Permissions</b>
+  &nbsp;&bull;&nbsp;
+  <b>Async Guardrails</b>
 </p>
 
 ---
