@@ -129,7 +129,7 @@ class CostTracking(AbstractCapability[Any]):
     Example:
         ```python
         from pydantic_ai import Agent
-        from pydantic_ai_middleware.guardrails import CostTracking
+        from pydantic_ai_shields import CostTracking
 
         tracking = CostTracking(budget_usd=5.0)
         agent = Agent("openai:gpt-4.1", capabilities=[tracking])
@@ -274,7 +274,7 @@ class ToolGuard(AbstractCapability[Any]):
     Example:
         ```python
         from pydantic_ai import Agent
-        from pydantic_ai_middleware.guardrails import ToolGuard
+        from pydantic_ai_shields import ToolGuard
 
         async def ask_user(tool_name, args):
             return input(f"Allow {tool_name}? (y/n) ") == "y"
@@ -349,7 +349,7 @@ class InputGuard(AbstractCapability[Any]):
     Example:
         ```python
         from pydantic_ai import Agent
-        from pydantic_ai_middleware.guardrails import InputGuard
+        from pydantic_ai_shields import InputGuard
 
         async def check_toxicity(prompt: str) -> bool:
             # Call moderation API...
@@ -394,7 +394,7 @@ class OutputGuard(AbstractCapability[Any]):
     Example:
         ```python
         from pydantic_ai import Agent
-        from pydantic_ai_middleware.guardrails import OutputGuard
+        from pydantic_ai_shields import OutputGuard
 
         def no_pii(output: str) -> bool:
             return "SSN" not in output and "credit card" not in output
@@ -443,7 +443,7 @@ class AsyncGuardrail(AbstractCapability[Any]):
     Example:
         ```python
         from pydantic_ai import Agent
-        from pydantic_ai_middleware.guardrails import AsyncGuardrail, InputGuard
+        from pydantic_ai_shields import AsyncGuardrail, InputGuard
 
         agent = Agent(
             "openai:gpt-4.1",

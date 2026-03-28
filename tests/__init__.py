@@ -1,1 +1,1 @@
-"""Tests for pydantic-ai-middleware."""
+"""Tests for pydantic-ai-shields."""
