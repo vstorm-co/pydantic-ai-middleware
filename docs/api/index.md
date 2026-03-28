@@ -1,54 +1,27 @@
 # API Reference
 
-Complete API documentation for pydantic-ai-middleware.
+Complete API documentation for pydantic-ai-shields.
 
-## Core Classes
+## Infrastructure Shields
 
-- [`AgentMiddleware`](middleware.md) - Base middleware class
-- [`MiddlewareAgent`](agent.md) - Agent wrapper with middleware
-- [`MiddlewareChain`](chain.md) - Composable middleware sequences
-- [`ConditionalMiddleware`](conditional.md) - Conditional middleware routing
-- [`PipelineSpec`](pipeline_spec.md) - Pipeline spec builder/exporter
-- [`MiddlewareToolset`](toolset.md) - Toolset wrapper for tool interception
+- [`CostTracking`](guardrails.md#costtracking) — Token/USD tracking with budget enforcement
+- [`ToolGuard`](guardrails.md#toolguard) — Block tools or require approval
+- [`InputGuard`](guardrails.md#inputguard) — Custom input validation
+- [`OutputGuard`](guardrails.md#outputguard) — Custom output validation
+- [`AsyncGuardrail`](guardrails.md#asyncguardrail) — Concurrent guardrail + LLM execution
 
-## Decorators
+## Content Shields
 
-- [`@before_run`](decorators.md#before_run)
-- [`@after_run`](decorators.md#after_run)
-- [`@before_model_request`](decorators.md#before_model_request)
-- [`@before_tool_call`](decorators.md#before_tool_call)
-- [`@after_tool_call`](decorators.md#after_tool_call)
-- [`@on_error`](decorators.md#on_error)
+- [`PromptInjection`](shields.md#promptinjection) — Prompt injection / jailbreak detection
+- [`PiiDetector`](shields.md#piidetector) — PII detection
+- [`SecretRedaction`](shields.md#secretredaction) — Secret/credential detection in output
+- [`BlockedKeywords`](shields.md#blockedkeywords) — Keyword blocking
+- [`NoRefusals`](shields.md#norefusals) — Refusal detection
 
 ## Exceptions
 
-- [`MiddlewareError`](exceptions.md#middlewareerror)
-- [`InputBlocked`](exceptions.md#inputblocked)
-- [`ToolBlocked`](exceptions.md#toolblocked)
-- [`OutputBlocked`](exceptions.md#outputblocked)
-
-## Quick Import
-
-```python
-from pydantic_ai_middleware import (
-    # Core
-    AgentMiddleware,
-    MiddlewareAgent,
-    MiddlewareChain,
-    ConditionalMiddleware,
-    PipelineSpec,
-    MiddlewareToolset,
-    # Decorators
-    before_run,
-    after_run,
-    before_model_request,
-    before_tool_call,
-    after_tool_call,
-    on_error,
-    # Exceptions
-    MiddlewareError,
-    InputBlocked,
-    ToolBlocked,
-    OutputBlocked,
-)
-```
+- [`GuardrailError`](exceptions.md) — Base exception
+- [`InputBlocked`](exceptions.md) — Input validation failed
+- [`OutputBlocked`](exceptions.md) — Output validation failed
+- [`ToolBlocked`](exceptions.md) — Tool access denied
+- [`BudgetExceededError`](exceptions.md) — Cost budget exceeded

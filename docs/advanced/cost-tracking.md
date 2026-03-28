@@ -1,144 +1,57 @@
 # Cost Tracking
 
-`CostTrackingMiddleware` automatically tracks token usage and calculates USD costs
-across agent runs. It uses [genai-prices](https://pypi.org/project/genai-prices/) to
-look up per-token pricing for supported models.
+`CostTracking` tracks token usage and calculates USD costs across agent runs using
+[genai-prices](https://pypi.org/project/genai-prices/).
 
-## Why use cost tracking
-
-- **Visibility** into how many tokens each run consumes.
-- **Budget enforcement** to prevent runaway API spend.
-- **Real-time callbacks** for dashboards, logging, or alerting.
-
-## Quick start
+## Basic Usage
 
 ```python
 from pydantic_ai import Agent
-from pydantic_ai.models.test import TestModel
-from pydantic_ai_middleware import MiddlewareAgent, MiddlewareContext
-from pydantic_ai_middleware.cost_tracking import create_cost_tracking_middleware
+from pydantic_ai_shields import CostTracking
 
-cost_mw = create_cost_tracking_middleware(
-    model_name="openai:gpt-4.1",
-    budget_limit_usd=5.0,
-    on_cost_update=lambda info: print(
-        f"Run #{info.run_count}: ${info.run_cost_usd:.4f} "
-        f"(total: ${info.total_cost_usd:.4f})"
-    ),
-)
+tracking = CostTracking(budget_usd=5.0)
+agent = Agent("openai:gpt-4.1", capabilities=[tracking])
 
-agent = MiddlewareAgent(
-    agent=Agent(model=TestModel()),
-    middleware=[cost_mw],
-    context=MiddlewareContext(),
-)
+result = await agent.run("Hello")
 
-result = await agent.run("Summarize this document")
+print(f"Cost: ${tracking.total_cost:.4f}")
+print(f"Tokens: {tracking.total_request_tokens} in / {tracking.total_response_tokens} out")
+print(f"Runs: {tracking.run_count}")
 ```
 
-!!! note
-    A `MiddlewareContext` is required on the `MiddlewareAgent` so the middleware
-    can read the `run_usage` metadata that is stored after each run.
+## Budget Enforcement
 
-## CostInfo fields
-
-After every run the middleware builds a `CostInfo` dataclass and passes it to the
-callback. The fields are:
-
-| Field | Type | Description |
-|---|---|---|
-| `run_cost_usd` | `float | None` | USD cost of this run. `None` if model is unknown. |
-| `total_cost_usd` | `float | None` | Cumulative USD cost across all runs. |
-| `run_request_tokens` | `int` | Input tokens consumed by this run. |
-| `run_response_tokens` | `int` | Output tokens consumed by this run. |
-| `total_request_tokens` | `int` | Cumulative input tokens across all runs. |
-| `total_response_tokens` | `int` | Cumulative output tokens across all runs. |
-| `run_count` | `int` | Number of completed runs so far. |
-
-## Factory function
-
-`create_cost_tracking_middleware()` is a convenience factory that creates a
-`CostTrackingMiddleware` instance:
+When cumulative cost exceeds `budget_usd`, a `BudgetExceededError` is raised:
 
 ```python
-from pydantic_ai_middleware.cost_tracking import create_cost_tracking_middleware
+from pydantic_ai_shields import CostTracking, BudgetExceededError
 
-mw = create_cost_tracking_middleware(
-    model_name="anthropic:claude-sonnet-4-5-20250929",
-    budget_limit_usd=10.0,
-    on_cost_update=lambda info: print(f"Total: ${info.total_cost_usd:.4f}"),
-)
-```
+tracking = CostTracking(budget_usd=1.0)
+agent = Agent("openai:gpt-4.1", capabilities=[tracking])
 
-Parameters:
-
-| Parameter | Type | Default | Description |
-|---|---|---|---|
-| `model_name` | `str | None` | `None` | Model identifier in `"provider:model"` format. `None` disables USD cost calculation (tokens are still tracked). |
-| `budget_limit_usd` | `float | None` | `None` | Maximum cumulative cost in USD. `None` means unlimited. |
-| `on_cost_update` | `CostCallback` | `None` | Sync or async callable invoked after each run with a `CostInfo` object. |
-
-## Budget limits
-
-When `budget_limit_usd` is set the middleware checks cumulative cost in the
-`before_run` hook. If the budget has been reached, a `BudgetExceededError` is raised
-before the agent processes the prompt.
-
-```python
-from pydantic_ai_middleware.cost_tracking import create_cost_tracking_middleware
-from pydantic_ai_middleware.exceptions import BudgetExceededError
-
-mw = create_cost_tracking_middleware(
-    model_name="openai:gpt-4.1",
-    budget_limit_usd=1.0,
-)
-
-# ... after many runs ...
 try:
-    result = await agent.run("Another question")
+    for i in range(1000):
+        await agent.run(f"Query {i}")
 except BudgetExceededError as e:
-    print(f"Budget exceeded: ${e.cost:.4f} >= ${e.budget:.4f}")
+    print(f"Budget exceeded: ${e.total_cost:.4f} > ${e.budget:.4f}")
 ```
 
-## Async callbacks
-
-The `on_cost_update` parameter accepts both sync and async callables. The middleware
-detects awaitables automatically.
+## Cost Callbacks
 
 ```python
-async def save_cost_to_db(info):
-    await db.execute(
-        "INSERT INTO costs (run, tokens_in, tokens_out, cost) VALUES (?, ?, ?, ?)",
-        (info.run_count, info.run_request_tokens, info.run_response_tokens, info.run_cost_usd),
-    )
+from pydantic_ai_shields import CostTracking, CostInfo
 
-mw = create_cost_tracking_middleware(
-    model_name="openai:gpt-4.1",
-    on_cost_update=save_cost_to_db,
-)
+def on_cost(info: CostInfo):
+    print(f"Run #{info.run_count}: ${info.run_cost_usd:.4f} (total: ${info.total_cost_usd:.4f})")
+
+agent = Agent("openai:gpt-4.1", capabilities=[CostTracking(on_cost_update=on_cost)])
 ```
 
-## Accessing cumulative state
+## Auto-Detection
 
-The middleware instance exposes read-only properties for cumulative totals:
+Model pricing is auto-detected from `ctx.model.model_id` on the first run.
+You can also specify explicitly:
 
 ```python
-from pydantic_ai_middleware.cost_tracking import CostTrackingMiddleware
-
-mw = CostTrackingMiddleware(model_name="openai:gpt-4.1")
-
-# After running the agent several times...
-print(f"Total cost:   ${mw.total_cost:.4f}")
-print(f"Total input:  {mw.total_request_tokens} tokens")
-print(f"Total output: {mw.total_response_tokens} tokens")
-print(f"Runs:         {mw.run_count}")
-
-# Reset all counters
-mw.reset()
+CostTracking(model_name="openai:gpt-4.1", budget_usd=5.0)
 ```
-
-## Next Steps
-
-- [Cost Tracking Example](../examples/cost-tracking.md) - Full working example
-- [Middleware Chains](middleware-chains.md) - Combine cost tracking with other middleware
-- [Hook Timeouts](hook-timeouts.md) - Add timeouts to middleware hooks

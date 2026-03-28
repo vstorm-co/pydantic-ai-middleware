@@ -1,5 +1,5 @@
-site_name: Pydantic AI Middleware
-site_description: Simple middleware library for Pydantic AI - clean before/after hooks
+site_name: Pydantic AI Shields
+site_description: Guardrail capabilities for Pydantic AI agents
 site_url: https://vstorm-co.github.io/pydantic-ai-middleware/
 repo_url: https://github.com/vstorm-co/pydantic-ai-middleware
 repo_name: vstorm-co/pydantic-ai-middleware
@@ -181,54 +181,28 @@ extra_css:
   - stylesheets/extra.css
 
 nav:
-  - Pydantic AI Middleware: index.md
+  - Pydantic AI Shields: index.md
   - Installation: installation.md
   - Getting Help: getting-help.md
   - Core Concepts:
     - concepts/index.md
-    - Middleware: concepts/middleware.md
-    - Hooks: concepts/hooks.md
-    - Decorators: concepts/decorators.md
   - Advanced Features:
-    - advanced/middleware-chains.md
-    - advanced/parallel-execution.md
-    - advanced/conditional-middleware.md
     - advanced/async-guardrails.md
-    - advanced/tool-name-filtering.md
-    - advanced/on-tool-error.md
-    - advanced/hook-timeouts.md
-    - advanced/permission-decisions.md
     - advanced/cost-tracking.md
-    - advanced/builder.md
-    - advanced/config-loading.md
-    - advanced/pipeline-spec.md
   - Examples:
     - examples/index.md
-    - Getting Started:
-      - examples/logging.md
-      - examples/rate-limiting.md
-      - examples/cost-tracking.md
     - Security:
       - examples/security.md
       - examples/pii-detection.md
       - examples/prompt-injection.md
       - examples/toxicity-check.md
       - examples/json-schema-validation.md
-    - Tool Control:
-      - examples/tool-name-filtering.md
-      - examples/tool-error-handling.md
-      - examples/hook-timeouts.md
-      - examples/permission-decisions.md
+    - Cost Control:
+      - examples/cost-tracking.md
   - API Reference:
     - api/index.md
-    - AgentMiddleware: api/middleware.md
-    - MiddlewareAgent: api/agent.md
-    - MiddlewareChain: api/chain.md
-    - ConditionalMiddleware: api/conditional.md
-    - PipelineSpec: api/pipeline_spec.md
-    - MiddlewareToolset: api/toolset.md
-    - Decorators: api/decorators.md
-    - Permissions: api/permissions.md
+    - Infrastructure Shields: api/guardrails.md
+    - Content Shields: api/shields.md
     - Exceptions: api/exceptions.md
 
 validation:

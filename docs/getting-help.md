@@ -1,19 +1,19 @@
 # Getting Help
 
-Need help with pydantic-ai-middleware? Here are the best ways to get support.
+Need help with pydantic-ai-shields? Here are the best ways to get support.
 
 ## GitHub Issues
 
 For bug reports and feature requests, open an issue on GitHub:
 
-- [Report a bug](https://github.com/vstorm-co/pydantic-ai-middleware/issues/new?labels=bug)
-- [Request a feature](https://github.com/vstorm-co/pydantic-ai-middleware/issues/new?labels=enhancement)
+- [Report a bug](https://github.com/vstorm-co/pydantic-ai-shields/issues/new?labels=bug)
+- [Request a feature](https://github.com/vstorm-co/pydantic-ai-shields/issues/new?labels=enhancement)
 
 ## GitHub Discussions
 
 For questions, ideas, and general discussion:
 
-- [GitHub Discussions](https://github.com/vstorm-co/pydantic-ai-middleware/discussions)
+- [GitHub Discussions](https://github.com/vstorm-co/pydantic-ai-shields/discussions)
 
 ## Documentation
 

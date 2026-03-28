@@ -1,97 +1,74 @@
 # Async Guardrails
 
-`AsyncGuardrailMiddleware` runs guardrails with configurable timing relative to the LLM call. This lets you optimize latency by running safety checks in parallel with the model.
+`AsyncGuardrail` runs a guard concurrently with the LLM call — if the guard fails
+first, the LLM is cancelled to save cost.
 
 ## Timing Modes
 
-The `GuardrailTiming` enum controls when guardrails execute:
+| Mode | Behavior |
+|------|----------|
+| `"concurrent"` | Guard runs alongside LLM. If guard fails, LLM result is discarded. |
+| `"blocking"` | Guard completes before LLM starts (traditional). |
+| `"monitoring"` | LLM runs first, guard runs after (fire-and-forget for audit/logging). |
 
-| Mode | Behavior | Latency Impact |
-|------|----------|----------------|
-| `BLOCKING` | Guardrail completes before LLM starts | Total = guardrail + LLM |
-| `CONCURRENT` | Guardrail runs alongside LLM; can cancel on failure | Total = max(guardrail, LLM) |
-| `ASYNC_POST` | Guardrail runs in background after response | Total = LLM only |
-
-## Basic Usage
+## Concurrent Mode (Default)
 
 ```python
-from pydantic_ai_middleware import (
-    AsyncGuardrailMiddleware,
-    GuardrailTiming,
-)
+from pydantic_ai import Agent
+from pydantic_ai_shields import AsyncGuardrail, InputGuard
 
-# BLOCKING mode - traditional, safe
-blocking = AsyncGuardrailMiddleware(
-    guardrail=SafetyChecker(),
-    timing=GuardrailTiming.BLOCKING,
-)
+async def check_policy(prompt: str) -> bool:
+    # Call your policy API
+    return await policy_api.check(prompt)
 
-# CONCURRENT mode - optimized latency
-concurrent = AsyncGuardrailMiddleware(
-    guardrail=SafetyChecker(),
-    timing=GuardrailTiming.CONCURRENT,
-    cancel_on_failure=True,  # Cancel LLM if guardrail fails
-)
-
-# ASYNC_POST mode - fastest response
-async_post = AsyncGuardrailMiddleware(
-    guardrail=OutputValidator(),
-    timing=GuardrailTiming.ASYNC_POST,
+agent = Agent(
+    "openai:gpt-4.1",
+    capabilities=[AsyncGuardrail(
+        guard=InputGuard(guard=check_policy),
+        timing="concurrent",
+        cancel_on_failure=True,
+        timeout=5.0,
+    )],
 )
 ```
 
-## Early Cancellation
+If `check_policy` returns `False` before the model finishes, the result is discarded
+and `InputBlocked` is raised — no tokens wasted.
 
-CONCURRENT mode with `cancel_on_failure=True` can short-circuit LLM calls:
+## Blocking Mode
+
+Traditional sequential execution — guard completes before model starts:
 
 ```python
-# If guardrail fails at 0.5s while LLM is still running,
-# the LLM call is cancelled immediately, saving costs!
-
-guardrail = AsyncGuardrailMiddleware(
-    guardrail=FastSafetyCheck(),
-    timing=GuardrailTiming.CONCURRENT,
-    cancel_on_failure=True,
+AsyncGuardrail(
+    guard=InputGuard(guard=check_policy),
+    timing="blocking",
 )
 ```
 
-## Combining with Parallel Execution
+## Monitoring Mode
 
-You can combine `ParallelMiddleware` and `AsyncGuardrailMiddleware` to run multiple guardrails in parallel while also running them concurrently with the LLM:
+Fire-and-forget — model runs first, guard runs after for logging/audit:
 
 ```python
-from pydantic_ai_middleware import (
-    AsyncGuardrailMiddleware,
-    ParallelMiddleware,
-    AggregationStrategy,
-    GuardrailTiming,
-    MiddlewareAgent,
+AsyncGuardrail(
+    guard=InputGuard(guard=log_for_compliance),
+    timing="monitoring",
 )
+```
 
-# Multiple parallel input validators
-input_validators = ParallelMiddleware(
-    middleware=[
-        ProfanityFilter(),
-        PIIDetector(),
-        InjectionGuard(),
+## Combining with Other Shields
+
+```python
+agent = Agent(
+    "openai:gpt-4.1",
+    capabilities=[
+        PromptInjection(),                    # Fast regex check (before_run)
+        AsyncGuardrail(                       # Slow API check (concurrent with LLM)
+            guard=InputGuard(guard=external_moderation_api),
+            timing="concurrent",
+        ),
+        SecretRedaction(),                    # Output check (after_run)
     ],
-    strategy=AggregationStrategy.ALL_MUST_PASS,
-)
-
-# Wrap in AsyncGuardrailMiddleware for concurrent execution with LLM
-safety_check = AsyncGuardrailMiddleware(
-    guardrail=input_validators,
-    timing=GuardrailTiming.CONCURRENT,
-    cancel_on_failure=True,
-)
-
-agent = MiddlewareAgent(
-    agent=base_agent,
-    middleware=[safety_check],
 )
 ```
-
-## Next Steps
-
-- [Parallel Execution](parallel-execution.md) - Run multiple middleware concurrently
-- [Config Loading](config-loading.md) - Load pipelines from config files

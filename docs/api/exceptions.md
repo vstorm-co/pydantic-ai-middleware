@@ -1,104 +1,59 @@
 # Exceptions
 
-Custom exceptions for middleware control flow and error reporting. All exceptions
-inherit from `MiddlewareError`, making it easy to catch any middleware-related error
-with a single `except` clause.
+All shield exceptions inherit from `GuardrailError`.
 
-The blocking exceptions (`InputBlocked`, `ToolBlocked`, `OutputBlocked`) are the
-primary way middleware communicates that a request should be rejected. Raise them from
-any hook to stop processing immediately.
+## GuardrailError
 
-## MiddlewareError
-
-::: pydantic_ai_middleware.MiddlewareError
-
-Base exception for all middleware errors.
-
-## MiddlewareConfigError
-
-::: pydantic_ai_middleware.exceptions.MiddlewareConfigError
-
-Raised when middleware configuration is invalid (unknown type names, bad predicate
-specs, malformed config files).
+Base exception for all shield violations.
 
 ## InputBlocked
 
-::: pydantic_ai_middleware.InputBlocked
-
-Raised to block input processing.
+Raised when input fails validation. Thrown by `InputGuard`, `PromptInjection`, `PiiDetector`, `BlockedKeywords`.
 
 ```python
-from pydantic_ai_middleware import InputBlocked
+from pydantic_ai_shields import InputBlocked
 
-raise InputBlocked("Content not allowed")
-raise InputBlocked()  # Uses default message
-```
-
-## ToolBlocked
-
-::: pydantic_ai_middleware.ToolBlocked
-
-Raised to block a tool call.
-
-```python
-from pydantic_ai_middleware import ToolBlocked
-
-raise ToolBlocked("dangerous_tool", "Not authorized")
-raise ToolBlocked("tool_name")  # Uses default reason
+try:
+    result = await agent.run("bad input")
+except InputBlocked as e:
+    print(f"Blocked: {e}")
 ```
 
 ## OutputBlocked
 
-::: pydantic_ai_middleware.OutputBlocked
-
-Raised to block output.
+Raised when output fails validation. Thrown by `OutputGuard`, `SecretRedaction`, `NoRefusals`.
 
 ```python
-from pydantic_ai_middleware import OutputBlocked
+from pydantic_ai_shields import OutputBlocked
 
-raise OutputBlocked("Contains sensitive information")
-raise OutputBlocked()  # Uses default message
+try:
+    result = await agent.run("prompt")
+except OutputBlocked as e:
+    print(f"Output blocked: {e}")
+```
+
+## ToolBlocked
+
+Raised when a tool call is denied. Thrown by `ToolGuard`.
+
+```python
+from pydantic_ai_shields import ToolBlocked
+
+try:
+    result = await agent.run("execute rm -rf /")
+except ToolBlocked as e:
+    print(f"Tool '{e.tool_name}' blocked: {e.reason}")
 ```
 
 ## BudgetExceededError
 
-::: pydantic_ai_middleware.exceptions.BudgetExceededError
-
-Raised when accumulated cost exceeds the configured budget limit. Used by
-`CostTrackingMiddleware`.
+Raised when cumulative cost exceeds the budget. Thrown by `CostTracking`.
 
 ```python
-from pydantic_ai_middleware.exceptions import BudgetExceededError
+from pydantic_ai_shields import BudgetExceededError
 
-# Raised automatically by CostTrackingMiddleware
-# You can also catch it:
 try:
-    result = await agent.run("prompt")
+    result = await agent.run("expensive query")
 except BudgetExceededError as e:
-    print(f"Over budget: ${e.cost:.4f} >= ${e.budget:.4f}")
+    print(f"Over budget: ${e.total_cost:.4f} > ${e.budget:.4f}")
 ```
-
-## ParallelExecutionFailed
-
-::: pydantic_ai_middleware.exceptions.ParallelExecutionFailed
-
-Raised when parallel middleware execution fails. Contains the list of errors and any
-successful results.
-
-## GuardrailTimeout
-
-::: pydantic_ai_middleware.exceptions.GuardrailTimeout
-
-Raised when an async guardrail exceeds its configured timeout.
-
-## MiddlewareTimeout
-
-::: pydantic_ai_middleware.exceptions.MiddlewareTimeout
-
-Raised when a middleware hook exceeds its per-middleware timeout.
-
-## AggregationFailed
-
-::: pydantic_ai_middleware.exceptions.AggregationFailed
-
-Raised when parallel results cannot be aggregated according to the chosen strategy.
