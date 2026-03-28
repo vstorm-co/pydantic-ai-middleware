@@ -188,7 +188,7 @@ class CostTracking(AbstractCapability[Any]):
             return
 
         try:  # pragma: no cover — depends on genai-prices database
-            from genai_prices import get_model_prices
+            from genai_prices import get_model_prices  # type: ignore[attr-defined]
 
             # Parse "provider:model" format
             if ":" in name:
